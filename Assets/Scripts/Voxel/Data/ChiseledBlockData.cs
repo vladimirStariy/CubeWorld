@@ -8,12 +8,14 @@ public sealed class ChiseledBlockData
     public readonly List<LineSegment> CachedOutlineSegments = new();
     public int Resolution { get; }
     public Vector3Int WorldPosition { get; }
+    public VoxelBlockType BlockType { get; }
     public bool OutlineDirty { get; set; } = true;
 
-    public ChiseledBlockData(int resolution, Vector3Int worldPosition)
+    public ChiseledBlockData(int resolution, Vector3Int worldPosition, VoxelBlockType blockType)
     {
         Resolution = resolution;
         WorldPosition = worldPosition;
+        BlockType = blockType;
         cells = new bool[resolution * resolution * resolution];
     }
 

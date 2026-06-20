@@ -135,12 +135,12 @@ public static class ChunkMeshBuilder
             case 0:
                 AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
                     new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymin, zmax),
-                    AtlasTileUv(textureSlot, 0f, 0f), AtlasTileUv(textureSlot, 1f, 0f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 0f, 1f));
+                    AtlasTileUv(textureSlot, 0f, 0f), AtlasTileUv(textureSlot, 0f, 1f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 1f, 0f));
                 break;
             case 1:
                 AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
                     new Vector3(xmin, ymin, zmax), new Vector3(xmin, ymax, zmax), new Vector3(xmin, ymax, zmin), new Vector3(xmin, ymin, zmin),
-                    AtlasTileUv(textureSlot, 0f, 1f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 1f, 0f), AtlasTileUv(textureSlot, 0f, 0f));
+                    AtlasTileUv(textureSlot, 0f, 0f), AtlasTileUv(textureSlot, 0f, 1f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 1f, 0f));
                 break;
             case 2:
                 AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
@@ -178,12 +178,12 @@ public static class ChunkMeshBuilder
         switch (faceIndex)
         {
             case 0:
-                tileU = blockLocal.y + 0.5f;
-                tileV = blockLocal.z + 0.5f;
+                tileU = blockLocal.z + 0.5f;
+                tileV = blockLocal.y + 0.5f;
                 break;
             case 1:
-                tileU = blockLocal.y + 0.5f;
-                tileV = 0.5f - blockLocal.z;
+                tileU = 0.5f - blockLocal.z;
+                tileV = blockLocal.y + 0.5f;
                 break;
             case 2:
                 tileU = blockLocal.x + 0.5f;
@@ -198,7 +198,7 @@ public static class ChunkMeshBuilder
                 tileV = blockLocal.y + 0.5f;
                 break;
             default:
-                tileU = 0.5f - blockLocal.x;
+                tileU = blockLocal.x + 0.5f;
                 tileV = blockLocal.y + 0.5f;
                 break;
         }
@@ -539,7 +539,7 @@ public static class ChunkMeshBuilder
                             }
                         }
 
-                        AddMicroGreedyFace(face, p, u, v, height, width, resolution, chunkLocalBlockPos, chunkWorldOrigin, vertices, triangles, normals, uvs);
+                        AddMicroGreedyFace(face, p, u, v, height, width, resolution, chunkLocalBlockPos, chunkWorldOrigin, block.BlockType, vertices, triangles, normals, uvs);
 
                         for (int du = 0; du < height; du++)
                         {
@@ -564,6 +564,7 @@ public static class ChunkMeshBuilder
         int resolution,
         Vector3Int blockCenter,
         Vector3Int chunkWorldOrigin,
+        VoxelBlockType blockType,
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
@@ -645,12 +646,14 @@ public static class ChunkMeshBuilder
                 break;
         }
 
+        var textureSlot = BlockTextureLibrary.GetFaceTextureSlot(blockType, faceIndex);
+
         AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
             v0, v1, v2, v3,
-            AtlasUvBlockLocal(faceIndex, v0 - blockOffset, BlockTextureSlot.Dirt),
-            AtlasUvBlockLocal(faceIndex, v1 - blockOffset, BlockTextureSlot.Dirt),
-            AtlasUvBlockLocal(faceIndex, v2 - blockOffset, BlockTextureSlot.Dirt),
-            AtlasUvBlockLocal(faceIndex, v3 - blockOffset, BlockTextureSlot.Dirt));
+            AtlasUvBlockLocal(faceIndex, v0 - blockOffset, textureSlot),
+            AtlasUvBlockLocal(faceIndex, v1 - blockOffset, textureSlot),
+            AtlasUvBlockLocal(faceIndex, v2 - blockOffset, textureSlot),
+            AtlasUvBlockLocal(faceIndex, v3 - blockOffset, textureSlot));
     }
 
     private static void AddQuad(

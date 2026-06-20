@@ -13,10 +13,12 @@ public static class ItemPreviewMeshBuilder
 
     private static readonly Dictionary<ItemKind, Mesh> Meshes = new();
     private static readonly Dictionary<int, Mesh> SingleStickMeshes = new();
+    private static Mesh groundStickMesh;
 
     public static bool SupportsPreview(ItemKind kind)
     {
-        return kind is ItemKind.GrassBundle or ItemKind.Stick or ItemKind.Flint;
+        return kind is ItemKind.GrassBundle or ItemKind.Stick or ItemKind.Flint or ItemKind.Chisel
+            or ItemKind.Clay or ItemKind.RawClayBowl or ItemKind.ClayBowl;
     }
 
     public static Mesh GetMesh(ItemKind kind)
@@ -31,6 +33,10 @@ public static class ItemPreviewMeshBuilder
             ItemKind.GrassBundle => BuildGrassBundleMesh(),
             ItemKind.Stick => BuildStickMesh(),
             ItemKind.Flint => BuildFlintMesh(),
+            ItemKind.Chisel => BuildChiselMesh(),
+            ItemKind.Clay => BuildClayMesh(),
+            ItemKind.RawClayBowl => BuildClayBowlMesh(),
+            ItemKind.ClayBowl => BuildClayBowlMesh(),
             _ => null
         };
 
@@ -42,14 +48,30 @@ public static class ItemPreviewMeshBuilder
         return cached;
     }
 
+    public static Mesh GetGroundStickMesh()
+    {
+        if (groundStickMesh != null)
+        {
+            return groundStickMesh;
+        }
+
+        var vertices = new List<Vector3>();
+        var triangles = new List<int>();
+        var normals = new List<Vector3>();
+        AddStick(vertices, triangles, normals, yawDegrees: 0f, pitchDegrees: 0f);
+        groundStickMesh = CreateMesh(vertices, triangles, normals);
+        return groundStickMesh;
+    }
+
     public static Mesh GetSingleStickMesh(int stickIndex)
     {
-        if (stickIndex < 0 || stickIndex >= StickAngles.Length)
+        if (stickIndex < 0)
         {
             return null;
         }
 
-        if (SingleStickMeshes.TryGetValue(stickIndex, out var cached) && cached != null)
+        var variant = stickIndex % StickAngles.Length;
+        if (SingleStickMeshes.TryGetValue(variant, out var cached) && cached != null)
         {
             return cached;
         }
@@ -57,10 +79,10 @@ public static class ItemPreviewMeshBuilder
         var vertices = new List<Vector3>();
         var triangles = new List<int>();
         var normals = new List<Vector3>();
-        var angles = StickAngles[stickIndex];
+        var angles = StickAngles[variant];
         AddStick(vertices, triangles, normals, angles.Yaw, angles.Pitch);
         cached = CreateMesh(vertices, triangles, normals);
-        SingleStickMeshes[stickIndex] = cached;
+        SingleStickMeshes[variant] = cached;
         return cached;
     }
 
@@ -76,6 +98,10 @@ public static class ItemPreviewMeshBuilder
             ItemKind.GrassBundle => new Color(0.38f, 0.72f, 0.28f),
             ItemKind.Stick => new Color(0.62f, 0.42f, 0.22f),
             ItemKind.Flint => new Color(0.55f, 0.58f, 0.62f),
+            ItemKind.Chisel => new Color(0.68f, 0.68f, 0.72f),
+            ItemKind.Clay => new Color(0.72f, 0.42f, 0.28f),
+            ItemKind.RawClayBowl => new Color(0.68f, 0.4f, 0.26f),
+            ItemKind.ClayBowl => new Color(0.55f, 0.32f, 0.22f),
             _ => Color.white
         };
     }
@@ -112,6 +138,18 @@ public static class ItemPreviewMeshBuilder
         return CreateMesh(vertices, triangles, normals);
     }
 
+    private static Mesh BuildChiselMesh()
+    {
+        var vertices = new List<Vector3>();
+        var triangles = new List<int>();
+        var normals = new List<Vector3>();
+
+        AddBox(vertices, triangles, normals, new Vector3(0f, -0.18f, 0f), new Vector3(0.08f, 0.36f, 0.08f));
+        AddBox(vertices, triangles, normals, new Vector3(0.14f, 0.08f, 0f), new Vector3(0.22f, 0.08f, 0.12f), Quaternion.Euler(0f, 0f, -28f));
+
+        return CreateMesh(vertices, triangles, normals);
+    }
+
     private static Mesh BuildFlintMesh()
     {
         var vertices = new List<Vector3>();
@@ -120,6 +158,45 @@ public static class ItemPreviewMeshBuilder
 
         AddBox(vertices, triangles, normals, new Vector3(0f, -0.18f, 0f), new Vector3(0.28f, 0.18f, 0.34f), Quaternion.Euler(12f, 24f, -8f));
         AddBox(vertices, triangles, normals, new Vector3(0.06f, -0.28f, -0.04f), new Vector3(0.2f, 0.12f, 0.22f), Quaternion.Euler(-6f, -18f, 14f));
+
+        return CreateMesh(vertices, triangles, normals);
+    }
+
+    private static Mesh BuildClayMesh()
+    {
+        var vertices = new List<Vector3>();
+        var triangles = new List<int>();
+        var normals = new List<Vector3>();
+
+        AddBox(vertices, triangles, normals, new Vector3(0f, 0f, 0f), new Vector3(0.42f, 0.28f, 0.36f), Quaternion.Euler(8f, 18f, -6f));
+        AddBox(vertices, triangles, normals, new Vector3(0.08f, 0.1f, -0.04f), new Vector3(0.22f, 0.18f, 0.2f), Quaternion.Euler(-12f, -24f, 10f));
+
+        return CreateMesh(vertices, triangles, normals);
+    }
+
+    private static Mesh BuildClayBowlMesh()
+    {
+        var vertices = new List<Vector3>();
+        var triangles = new List<int>();
+        var normals = new List<Vector3>();
+
+        const int segments = 16;
+        const float outerRadius = 0.34f;
+        const float innerRadius = 0.24f;
+        const float height = 0.14f;
+
+        for (int i = 0; i < segments; i++)
+        {
+            var a0 = i / (float)segments * Mathf.PI * 2f;
+            var a1 = (i + 1) / (float)segments * Mathf.PI * 2f;
+            var o0 = new Vector3(Mathf.Cos(a0) * outerRadius, 0f, Mathf.Sin(a0) * outerRadius);
+            var o1 = new Vector3(Mathf.Cos(a1) * outerRadius, 0f, Mathf.Sin(a1) * outerRadius);
+            var i0 = new Vector3(Mathf.Cos(a0) * innerRadius, height, Mathf.Sin(a0) * innerRadius);
+            var i1 = new Vector3(Mathf.Cos(a1) * innerRadius, height, Mathf.Sin(a1) * innerRadius);
+
+            AddQuad(vertices, triangles, normals, Vector3.up, i0, i1, o1, o0);
+            AddQuad(vertices, triangles, normals, (o0 + o1).normalized, o0, o1, new Vector3(o1.x, -height * 0.35f, o1.z), new Vector3(o0.x, -height * 0.35f, o0.z));
+        }
 
         return CreateMesh(vertices, triangles, normals);
     }

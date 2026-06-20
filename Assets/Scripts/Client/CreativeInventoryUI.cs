@@ -8,8 +8,7 @@ public sealed class CreativeInventoryUI : MonoBehaviour, ICreativeInventorySlotH
     private const float HotbarSlotSpacing = 2f;
     private const float HotbarSlotBorder = 2f;
     private const float HotbarBottomPadding = 12f;
-    private const float CreativePanelWidth = 320f;
-    private const float CreativePanelHeight = 120f;
+    private const int CreativeVisibleRows = 2;
 
     private CreativeInventory inventory;
     private FirstPersonCharacterController playerController;
@@ -184,7 +183,17 @@ public sealed class CreativeInventoryUI : MonoBehaviour, ICreativeInventorySlotH
         hotbarView = new CreativeHotbarView(SlotSize, HotbarSlotSpacing, HotbarSlotBorder);
         hotbarView.Build(root.transform, HotbarBottomPadding, inventory, this);
 
-        panelView = new CreativePanelView(SlotSize, SlotSpacing, CreativePanelWidth, CreativePanelHeight, HotbarBottomPadding, SlotSize);
+        var hotbarGridWidth = CreativeInventory.HotbarSize * SlotSize
+                              + (CreativeInventory.HotbarSize - 1) * HotbarSlotSpacing;
+        var creativeViewportHeight = CreativeVisibleRows * SlotSize
+                                     + (CreativeVisibleRows - 1) * SlotSpacing;
+        panelView = new CreativePanelView(
+            SlotSize,
+            SlotSpacing,
+            hotbarGridWidth,
+            creativeViewportHeight,
+            HotbarBottomPadding,
+            SlotSize);
         panelView.Build(root.transform, inventory, this);
 
         drag.Build(root.transform);

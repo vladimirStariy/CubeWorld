@@ -5,6 +5,7 @@ public static class BlockWorldMaterialSetup
     public static Material CreateBlockMaterial(
         Texture2D dirtTexture,
         Texture2D grassTexture,
+        Texture2D grassSideTexture,
         Texture2D prebuiltAtlas,
         out Texture2D atlasTexture)
     {
@@ -17,14 +18,16 @@ public static class BlockWorldMaterialSetup
         }
 
         var dirt = BlockAtlasBuilder.ResolveDefaultDirtTexture(dirtTexture);
-        var grass = BlockAtlasBuilder.ResolveDefaultGrassTexture(grassTexture);
-        if (dirt == null || grass == null)
+        var grassTop = BlockAtlasBuilder.ResolveDefaultGrassTexture(grassTexture);
+        var grassSide = BlockAtlasBuilder.ResolveDefaultGrassSideTexture(grassSideTexture);
+        if (dirt == null || grassTop == null || grassSide == null)
         {
-            Debug.LogWarning($"BlockWorldMaterialSetup: missing textures (dirt={dirt != null}, grass={grass != null}).");
+            Debug.LogWarning(
+                $"BlockWorldMaterialSetup: missing textures (dirt={dirt != null}, grassTop={grassTop != null}, grassSide={grassSide != null}).");
             return CreateFallbackMaterial(litShader);
         }
 
-        var atlas = prebuiltAtlas != null ? prebuiltAtlas : BlockAtlasBuilder.Build(dirt, grass);
+        var atlas = prebuiltAtlas != null ? prebuiltAtlas : BlockAtlasBuilder.Build(dirt, grassTop, grassSide);
         if (atlas == null)
         {
             Debug.LogWarning("BlockWorldMaterialSetup: block atlas not found, using fallback color.");

@@ -12,7 +12,11 @@ public sealed class CreativeInventory : MonoBehaviour
         new(HotbarItem.FromBlock(VoxelBlockType.DirtSlab)),
         new(HotbarItem.GrassBundle()),
         new(HotbarItem.Stick()),
-        new(HotbarItem.Flint())
+        new(HotbarItem.Flint()),
+        new(HotbarItem.Chisel()),
+        new(HotbarItem.Clay()),
+        new(HotbarItem.RawClayBowl()),
+        new(HotbarItem.ClayBowl())
     };
 
     private readonly HotbarItem[] hotbar = new HotbarItem[HotbarSize];
@@ -79,7 +83,7 @@ public sealed class CreativeInventory : MonoBehaviour
             return;
         }
 
-        hotbar[index] = item;
+        hotbar[index] = item.IsEmpty ? default : item.WithCount(Mathf.Min(item.Count, item.MaxStack));
         selectedSlot = index;
         Changed?.Invoke();
     }
@@ -87,6 +91,130 @@ public sealed class CreativeInventory : MonoBehaviour
     public void AssignToSelectedSlot(HotbarItem item)
     {
         AssignToSlot(selectedSlot, item);
+    }
+
+    public bool TryConsumeFromSelected(int amount, out HotbarItem consumed)
+    {
+        consumed = default;
+        if (amount <= 0 || !TryGetSelectedItem(out var item) || item.Count < amount)
+        {
+            return false;
+        }
+
+        consumed = item.WithCount(amount);
+        if (item.Count == amount)
+        {
+            hotbar[selectedSlot] = default;
+        }
+        else
+        {
+            hotbar[selectedSlot] = item.WithCount(item.Count - amount);
+        }
+
+        Changed?.Invoke();
+        return true;
+    }
+
+    public int GetAddableAmount(HotbarItem item)
+    {
+        if (item.IsEmpty)
+        {
+            return 0;
+        }
+
+        if (!item.IsStackable)
+        {
+            for (int i = 0; i < HotbarSize; i++)
+            {
+                if (hotbar[i].IsEmpty)
+                {
+                    return Mathf.Min(1, item.Count);
+                }
+            }
+
+            return 0;
+        }
+
+        var space = 0;
+        for (int i = 0; i < HotbarSize; i++)
+        {
+            var slot = hotbar[i];
+            if (slot.CanStackWith(item))
+            {
+                space += slot.MaxStack - slot.Count;
+            }
+        }
+
+        for (int i = 0; i < HotbarSize; i++)
+        {
+            if (hotbar[i].IsEmpty)
+            {
+                space += item.MaxStack;
+            }
+        }
+
+        return Mathf.Min(item.Count, space);
+    }
+
+    public int TryAddItem(HotbarItem item)
+    {
+        if (item.IsEmpty)
+        {
+            return 0;
+        }
+
+        if (!item.IsStackable)
+        {
+            for (int i = 0; i < HotbarSize; i++)
+            {
+                if (!hotbar[i].IsEmpty)
+                {
+                    continue;
+                }
+
+                hotbar[i] = item.WithCount(1);
+                Changed?.Invoke();
+                return item.Count > 1 ? item.Count - 1 : 0;
+            }
+
+            return item.Count;
+        }
+
+        var remaining = item.Count;
+        remaining = TryMergeIntoSlot(selectedSlot, item, remaining);
+
+        for (int i = 0; i < HotbarSize && remaining > 0; i++)
+        {
+            if (i == selectedSlot)
+            {
+                continue;
+            }
+
+            remaining = TryMergeIntoSlot(i, item, remaining);
+        }
+
+        remaining = TryFillEmptySlot(selectedSlot, item, remaining);
+        for (int i = 0; i < HotbarSize && remaining > 0; i++)
+        {
+            if (i == selectedSlot)
+            {
+                continue;
+            }
+
+            remaining = TryFillEmptySlot(i, item, remaining);
+        }
+
+        if (remaining != item.Count)
+        {
+            Changed?.Invoke();
+        }
+
+        return remaining;
+    }
+
+    public bool TryAddToSelected(HotbarItem item)
+    {
+        return TryAddItem(item) == 0;
     }
 
     public void SwapHotbarSlots(int fromIndex, int toIndex)
@@ -122,5 +250,35 @@ public sealed class CreativeInventory : MonoBehaviour
         }
 
         SelectSlot(next);
+    }
+
+    private int TryMergeIntoSlot(int index, HotbarItem item, int remaining)
+    {
+        var slot = hotbar[index];
+        if (!slot.CanStackWith(item))
+        {
+            return remaining;
+        }
+
+        var canAdd = Mathf.Min(remaining, slot.MaxStack - slot.Count);
+        if (canAdd <= 0)
+        {
+            return remaining;
+        }
+
+        hotbar[index] = slot.WithCount(slot.Count + canAdd);
+        return remaining - canAdd;
+    }
+
+    private int TryFillEmptySlot(int index, HotbarItem item, int remaining)
+    {
+        if (remaining <= 0 || !hotbar[index].IsEmpty)
+        {
+            return remaining;
+        }
+
+        var add = Mathf.Min(remaining, item.MaxStack);
+        hotbar[index] = item.WithCount(add);
+        return remaining - add;
     }
 }

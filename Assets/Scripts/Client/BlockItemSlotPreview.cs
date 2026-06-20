@@ -8,6 +8,7 @@ public sealed class BlockItemSlotPreview : MonoBehaviour
 
     private RawImage rawImage;
     private Text itemLabel;
+    private Text stackCountLabel;
     private RenderTexture renderTexture;
     private VoxelBlockType? blockType;
     private ItemKind? previewItemKind;
@@ -85,18 +86,21 @@ public sealed class BlockItemSlotPreview : MonoBehaviour
         if (item.IsEmpty)
         {
             SetBlockType(null);
+            HideStackCount();
             return;
         }
 
         if (item.Kind == ItemKind.Block)
         {
             SetBlockType(item.BlockType, spin);
+            ShowStackCount(item.Count);
             return;
         }
 
         if (ItemPreviewMeshBuilder.SupportsPreview(item.Kind))
         {
             SetItemPreview(item.Kind, spin);
+            ShowStackCount(item.Count);
             return;
         }
 
@@ -105,7 +109,8 @@ public sealed class BlockItemSlotPreview : MonoBehaviour
         lastRenderedAngle = float.NaN;
         rawImage.enabled = false;
         enableSpin = false;
-        ShowItemLabel(item.GetDisplayName(), GetItemLabelColor(item.Kind));
+        ShowItemLabel(item.WithCount(1).GetDisplayName(), GetItemLabelColor(item.Kind));
+        ShowStackCount(item.Count);
     }
 
     public void SetItemPreview(ItemKind kind, bool spin = true)
@@ -124,6 +129,7 @@ public sealed class BlockItemSlotPreview : MonoBehaviour
         previewItemKind = null;
         lastRenderedAngle = float.NaN;
         HideItemLabel();
+        HideStackCount();
 
         if (blockType.HasValue)
         {
@@ -173,6 +179,52 @@ public sealed class BlockItemSlotPreview : MonoBehaviour
         }
     }
 
+    private void ShowStackCount(int count)
+    {
+        if (count <= 1)
+        {
+            HideStackCount();
+            return;
+        }
+
+        EnsureStackCountLabel();
+        stackCountLabel.text = count.ToString();
+        stackCountLabel.enabled = true;
+    }
+
+    private void HideStackCount()
+    {
+        if (stackCountLabel != null)
+        {
+            stackCountLabel.enabled = false;
+        }
+    }
+
+    private void EnsureStackCountLabel()
+    {
+        if (stackCountLabel != null)
+        {
+            return;
+        }
+
+        var labelObject = new GameObject("StackCountLabel");
+        labelObject.transform.SetParent(transform, false);
+        var rect = labelObject.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(1f, 0f);
+        rect.anchorMax = new Vector2(1f, 0f);
+        rect.pivot = new Vector2(1f, 0f);
+        rect.anchoredPosition = new Vector2(-2f, 2f);
+        rect.sizeDelta = new Vector2(28f, 16f);
+
+        stackCountLabel = labelObject.AddComponent<Text>();
+        stackCountLabel.alignment = TextAnchor.LowerRight;
+        stackCountLabel.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        stackCountLabel.fontSize = 11;
+        stackCountLabel.fontStyle = FontStyle.Bold;
+        stackCountLabel.color = Color.white;
+        stackCountLabel.raycastTarget = false;
+    }
+
     private void EnsureItemLabel()
     {
         if (itemLabel != null)
@@ -202,6 +254,10 @@ public sealed class BlockItemSlotPreview : MonoBehaviour
             ItemKind.GrassBundle => new Color(0.45f, 0.82f, 0.35f),
             ItemKind.Stick => new Color(0.72f, 0.52f, 0.28f),
             ItemKind.Flint => new Color(0.75f, 0.78f, 0.82f),
+            ItemKind.Chisel => new Color(0.68f, 0.68f, 0.72f),
+            ItemKind.Clay => new Color(0.82f, 0.55f, 0.35f),
+            ItemKind.RawClayBowl => new Color(0.78f, 0.5f, 0.32f),
+            ItemKind.ClayBowl => new Color(0.62f, 0.4f, 0.28f),
             _ => Color.white
         };
     }

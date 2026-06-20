@@ -214,9 +214,43 @@ public sealed class VoxelWorldStorage : IVoxelBlockView
         }
     }
 
-    public bool TryChiselBlock(Vector3Int blockPosition, Vector3 localPoint)
+    public bool TryBeginChiselBlock(Vector3Int blockPosition)
     {
-        if (!IsInWorld(blockPosition) || !IsBlockOccupied(blockPosition))
+        if (!IsInWorld(blockPosition) || chiseledBlocks.ContainsKey(blockPosition))
+        {
+            return false;
+        }
+
+        if (GetBlock(blockPosition) == VoxelBlockType.Campfire || !IsBlockOccupied(blockPosition))
+        {
+            return false;
+        }
+
+        var blockType = GetBlock(blockPosition);
+        var chiseled = new ChiseledBlockData(ChiselResolution, blockPosition, blockType);
+        chiseled.FillSolid();
+        chiseledBlocks[blockPosition] = chiseled;
+        SetBlockFast(blockPosition, VoxelBlockType.Air);
+
+        MarkChunkDirty(WorldToChunk(blockPosition));
+        MarkNeighborChunksDirtyIfBorder(WorldToLocal(blockPosition), WorldToChunk(blockPosition));
+        RebuildDirtyChunks();
+        return true;
+    }
+
+    public bool TryChiselRemoveVoxel(Vector3Int blockPosition, Vector3 localPoint)
+    {
+        return TryChiselSetCell(blockPosition, localPoint, solid: false);
+    }
+
+    public bool TryChiselAddVoxel(Vector3Int blockPosition, Vector3 localPoint)
+    {
+        return TryChiselSetCell(blockPosition, localPoint, solid: true);
+    }
+
+    private bool TryChiselSetCell(Vector3Int blockPosition, Vector3 localPoint, bool solid)
+    {
+        if (!IsInWorld(blockPosition))
         {
             return false;
         }
@@ -228,19 +262,11 @@ public sealed class VoxelWorldStorage : IVoxelBlockView
 
         if (!chiseledBlocks.TryGetValue(blockPosition, out var chiseled))
         {
-            if (GetBlock(blockPosition) == VoxelBlockType.Air)
-            {
-                return false;
-            }
-
-            chiseled = new ChiseledBlockData(ChiselResolution, blockPosition);
-            chiseled.FillSolid();
-            chiseledBlocks[blockPosition] = chiseled;
-            SetBlockFast(blockPosition, VoxelBlockType.Air);
+            return false;
         }
 
         var cell = ChiseledBlockData.LocalPointToCell(localPoint, ChiselResolution);
-        if (!chiseled.SetCell(cell.x, cell.y, cell.z, false))
+        if (!chiseled.SetCell(cell.x, cell.y, cell.z, solid))
         {
             return false;
         }
@@ -272,7 +298,7 @@ public sealed class VoxelWorldStorage : IVoxelBlockView
                 return false;
             }
 
-            result = new BlockQueryResult(VoxelBlockType.Dirt, true, solidCells, chiseled.Resolution);
+            result = new BlockQueryResult(chiseled.BlockType, true, solidCells, chiseled.Resolution);
             return true;
         }
 

@@ -37,7 +37,14 @@ public sealed class CreativeInventorySlot : MonoBehaviour,
 
         if (isCreativeSource)
         {
-            inventory.AssignToSelectedSlot(creativeItem);
+            var hotbarSlot = hotbarIndex >= 0
+                ? hotbarIndex % CreativeInventory.HotbarSize
+                : inventory.SelectedSlot;
+            if (inventory.TryAddItem(creativeItem) > 0)
+            {
+                inventory.AssignToSlot(hotbarSlot, creativeItem);
+            }
+
             return;
         }
 

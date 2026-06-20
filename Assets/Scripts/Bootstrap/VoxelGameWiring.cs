@@ -11,6 +11,7 @@ public sealed class VoxelGameWiring
     public CrosshairUI CrosshairUi { get; private set; }
     public PlayerDebugOverlay DebugOverlay { get; private set; }
     public BlockEntityUiController BlockEntityUi { get; private set; }
+    public ClayFormingController ClayFormingController { get; private set; }
     public GameHudRoot HudRoot { get; private set; }
     public Camera PlayerCamera { get; private set; }
 
@@ -31,6 +32,7 @@ public sealed class VoxelGameWiring
         CreativeInventory = Require(references.CreativeInventory, () => VoxelGameObjectFactory.CreateCreativeInventory(parent));
         CommandConsole = Require(references.CommandConsole, () => VoxelGameObjectFactory.CreateCommandConsole(parent));
         CreativeInventoryUi = Require(references.CreativeInventoryUi, () => VoxelGameObjectFactory.CreateCreativeInventoryUi(parent));
+        ClayFormingController = Require(references.ClayFormingController, () => VoxelGameObjectFactory.CreateClayFormingController(parent));
         WorldClient = Require(references.WorldClient, () => VoxelGameObjectFactory.CreateWorldClient(parent));
         CrosshairUi = Require(references.CrosshairUi, () => VoxelGameObjectFactory.CreateCrosshair(parent));
         DebugOverlay = Require(references.DebugOverlay, () => VoxelGameObjectFactory.CreateDebugOverlay(parent));
@@ -42,8 +44,9 @@ public sealed class VoxelGameWiring
         var blockEntityUiRegistry = new BlockEntityUiRegistry();
         blockEntityUiRegistry.Register(new CampfireBlockEntityUiProvider());
         BlockEntityUi.Configure(HudRoot.Canvas, WorldServer, PlayerController, blockEntityUiRegistry);
-        WorldClient.Configure(WorldServer, PlayerCamera, characterController, CreativeInventory, BlockEntityUi);
         CreativeInventoryUi.Configure(HudRoot.Canvas, CreativeInventory, PlayerController, CommandConsole, blockAtlas);
+        ClayFormingController.Configure(WorldServer, PlayerCamera, CreativeInventory, CreativeInventoryUi, PlayerController, HudRoot.Canvas);
+        WorldClient.Configure(WorldServer, PlayerCamera, characterController, CreativeInventory, BlockEntityUi, CreativeInventoryUi, ClayFormingController);
         CommandConsole.Configure(HudRoot.Canvas, PlayerController, CreativeInventory, WorldServer, CreativeInventoryUi);
         CrosshairUi.Configure(HudRoot.Canvas);
         DebugOverlay.Configure(HudRoot.Canvas, PlayerController, WorldClient);
@@ -68,5 +71,6 @@ public sealed class VoxelGameReferences
     public CrosshairUI CrosshairUi;
     public PlayerDebugOverlay DebugOverlay;
     public BlockEntityUiController BlockEntityUi;
+    public ClayFormingController ClayFormingController;
     public Camera PlayerCamera;
 }

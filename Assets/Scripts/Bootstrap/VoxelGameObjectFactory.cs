@@ -56,6 +56,13 @@ public static class VoxelGameObjectFactory
         return consoleObject.AddComponent<GameCommandConsole>();
     }
 
+    public static ClayFormingController CreateClayFormingController(Transform parent)
+    {
+        var controllerObject = new GameObject("ClayFormingController");
+        controllerObject.transform.SetParent(parent, false);
+        return controllerObject.AddComponent<ClayFormingController>();
+    }
+
     public static BlockWorldClient CreateWorldClient(Transform parent)
     {
         var clientObject = new GameObject("BlockWorldClient");

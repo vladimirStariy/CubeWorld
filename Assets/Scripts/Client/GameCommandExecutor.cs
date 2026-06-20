@@ -43,7 +43,7 @@ public static class GameCommandExecutor
         {
             case "help":
             case "?":
-                response = "Commands: help, pos, tp <x> <y> <z>, give <dirt|grass|dirt_slab|grass_bundle|stick|flint>, clear";
+                response = "Commands: help, pos, tp <x> <y> <z>, give <item> [count], clear";
                 return true;
 
             case "pos":
@@ -87,7 +87,7 @@ public static class GameCommandExecutor
 
                 if (parts.Length < 2)
                 {
-                    response = "Usage: /give dirt|grass|dirt_slab|grass_bundle|stick|flint";
+                    response = "Usage: /give <dirt|grass|dirt_slab|grass_bundle|stick|flint|chisel|clay|clay_bowl|raw_clay_bowl> [count]";
                     return true;
                 }
 
@@ -97,8 +97,34 @@ public static class GameCommandExecutor
                     return true;
                 }
 
-                context.Inventory.AssignToSelectedSlot(item);
-                response = $"Gave {item.GetDisplayName()} to selected hotbar slot.";
+                var count = 1;
+                if (parts.Length >= 3)
+                {
+                    if (!TryParseCount(parts[2], out count))
+                    {
+                        response = "Invalid count. Usage: /give <item> [count]";
+                        return true;
+                    }
+
+                    count = Mathf.Clamp(count, 1, 9999);
+                }
+
+                var remainder = GiveItems(context.Inventory, item, count);
+                if (remainder >= count)
+                {
+                    response = "Inventory is full.";
+                    return true;
+                }
+
+                if (remainder > 0)
+                {
+                    response = $"Added {count - remainder} of {item.WithCount(1).GetDisplayName()}. Could not add {remainder}.";
+                    return true;
+                }
+
+                response = count > 1
+                    ? $"Added {count} {item.WithCount(1).GetDisplayName()} to inventory."
+                    : $"Added {item.GetDisplayName()} to inventory.";
                 return true;
 
             case "clear":
@@ -115,6 +141,32 @@ public static class GameCommandExecutor
     private static bool TryParseCoord(string text, out float value)
     {
         return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryParseCount(string text, out int value)
+    {
+        return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) && value > 0;
+    }
+
+    private static int GiveItems(CreativeInventory inventory, HotbarItem item, int count)
+    {
+        if (item.IsStackable)
+        {
+            return inventory.TryAddItem(item.WithCount(count));
+        }
+
+        var remainder = count;
+        while (remainder > 0)
+        {
+            var before = remainder;
+            remainder = inventory.TryAddItem(item.WithCount(remainder));
+            if (remainder == before)
+            {
+                break;
+            }
+        }
+
+        return remainder;
     }
 
     private static bool TryParseHotbarItem(string text, out HotbarItem item)
@@ -157,6 +209,32 @@ public static class GameCommandExecutor
             || string.Equals(text, "flint_and_steel", StringComparison.OrdinalIgnoreCase))
         {
             item = HotbarItem.Flint();
+            return true;
+        }
+
+        if (string.Equals(text, "chisel", StringComparison.OrdinalIgnoreCase))
+        {
+            item = HotbarItem.Chisel();
+            return true;
+        }
+
+        if (string.Equals(text, "clay", StringComparison.OrdinalIgnoreCase))
+        {
+            item = HotbarItem.Clay();
+            return true;
+        }
+
+        if (string.Equals(text, "raw_clay_bowl", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(text, "raw_bowl", StringComparison.OrdinalIgnoreCase))
+        {
+            item = HotbarItem.RawClayBowl();
+            return true;
+        }
+
+        if (string.Equals(text, "clay_bowl", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(text, "bowl", StringComparison.OrdinalIgnoreCase))
+        {
+            item = HotbarItem.ClayBowl();
             return true;
         }
 

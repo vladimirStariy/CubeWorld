@@ -77,12 +77,12 @@ public static class BlockPreviewMeshBuilder
                 case 0:
                     AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
                         new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymin, zmax),
-                        textureSlot, 0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f);
+                        textureSlot, 0f, 0f, 0f, 1f, 1f, 1f, 1f, 0f);
                     break;
                 case 1:
                     AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
                         new Vector3(xmin, ymin, zmax), new Vector3(xmin, ymax, zmax), new Vector3(xmin, ymax, zmin), new Vector3(xmin, ymin, zmin),
-                        textureSlot, 0f, 1f, 1f, 1f, 1f, 0f, 0f, 0f);
+                        textureSlot, 0f, 0f, 0f, 1f, 1f, 1f, 1f, 0f);
                     break;
                 case 2:
                     AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
@@ -134,12 +134,12 @@ public static class BlockPreviewMeshBuilder
             case 0:
                 AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
                     new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymin, zmax),
-                    textureSlot, 0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f);
+                    textureSlot, 0f, 0f, 0f, 1f, 1f, 1f, 1f, 0f);
                 break;
             case 1:
                 AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
                     new Vector3(xmin, ymin, zmax), new Vector3(xmin, ymax, zmax), new Vector3(xmin, ymax, zmin), new Vector3(xmin, ymin, zmin),
-                    textureSlot, 0f, 1f, 1f, 1f, 1f, 0f, 0f, 0f);
+                    textureSlot, 0f, 0f, 0f, 1f, 1f, 1f, 1f, 0f);
                 break;
             case 2:
                 AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
@@ -219,10 +219,10 @@ public static class BlockPreviewMeshBuilder
     {
         AddQuad(vertices, triangles, normals, uvs, Vector3.right,
             new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymin, zmax),
-            textureSlot, 0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f);
+            textureSlot, 0f, 0f, 0f, 1f, 1f, 1f, 1f, 0f);
         AddQuad(vertices, triangles, normals, uvs, Vector3.left,
             new Vector3(xmin, ymin, zmax), new Vector3(xmin, ymax, zmax), new Vector3(xmin, ymax, zmin), new Vector3(xmin, ymin, zmin),
-            textureSlot, 0f, 1f, 1f, 1f, 1f, 0f, 0f, 0f);
+            textureSlot, 0f, 0f, 0f, 1f, 1f, 1f, 1f, 0f);
         AddQuad(vertices, triangles, normals, uvs, Vector3.up,
             new Vector3(xmin, ymax, zmax), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymax, zmin), new Vector3(xmin, ymax, zmin),
             textureSlot, 0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f);

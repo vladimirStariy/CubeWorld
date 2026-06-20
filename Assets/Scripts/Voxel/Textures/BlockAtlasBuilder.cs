@@ -5,13 +5,13 @@ using UnityEditor;
 
 public static class BlockAtlasBuilder
 {
-    public const int Columns = 2;
+    public const int Columns = 3;
     public const int Rows = 1;
     public const int DefaultTileSize = 32;
 
-    public static Texture2D Build(Texture2D dirt, Texture2D grass)
+    public static Texture2D Build(Texture2D dirt, Texture2D grassTop, Texture2D grassSide)
     {
-        if (dirt == null || grass == null)
+        if (dirt == null || grassTop == null || grassSide == null)
         {
             return null;
         }
@@ -26,7 +26,8 @@ public static class BlockAtlasBuilder
         };
 
         CopyTile(dirt, atlas, 0, 0, tileWidth, tileHeight);
-        CopyTile(grass, atlas, tileWidth, 0, tileWidth, tileHeight);
+        CopyTile(grassTop, atlas, tileWidth, 0, tileWidth, tileHeight);
+        CopyTile(grassSide, atlas, tileWidth * 2, 0, tileWidth, tileHeight);
         atlas.Apply(true, false);
         return atlas;
     }
@@ -66,6 +67,24 @@ public static class BlockAtlasBuilder
 #endif
 
         return Resources.Load<Texture2D>("Textures/grass");
+    }
+
+    public static Texture2D ResolveDefaultGrassSideTexture(Texture2D assigned)
+    {
+        if (assigned != null)
+        {
+            return assigned;
+        }
+
+#if UNITY_EDITOR
+        var fromAssets = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/grass_block_side.png");
+        if (fromAssets != null)
+        {
+            return fromAssets;
+        }
+#endif
+
+        return Resources.Load<Texture2D>("Textures/grass_block_side");
     }
 
     private static void CopyTile(Texture2D source, Texture2D atlas, int destX, int destY, int tileWidth, int tileHeight)

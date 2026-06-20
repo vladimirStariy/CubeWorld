@@ -13,7 +13,8 @@ public enum BlockFace
 public enum BlockTextureSlot : byte
 {
     Dirt = 0,
-    GrassTop = 1
+    GrassTop = 1,
+    GrassSide = 2
 }
 
 /// <summary>
@@ -51,9 +52,14 @@ public static class BlockTextureLibrary
 
     public static BlockTextureSlot GetFaceTextureSlot(VoxelBlockType blockType, BlockFace face)
     {
-        if (blockType == VoxelBlockType.GrassBlock && face == BlockFace.Top)
+        if (blockType == VoxelBlockType.GrassBlock)
         {
-            return BlockTextureSlot.GrassTop;
+            return face switch
+            {
+                BlockFace.Top => BlockTextureSlot.GrassTop,
+                BlockFace.Bottom => BlockTextureSlot.Dirt,
+                _ => BlockTextureSlot.GrassSide
+            };
         }
 
         return BlockTextureSlot.Dirt;
