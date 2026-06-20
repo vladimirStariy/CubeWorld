@@ -86,8 +86,8 @@ public sealed class CreativePanelView
         var contentObject = new GameObject("Content");
         contentObject.transform.SetParent(viewportObject.transform, false);
         var contentRect = contentObject.AddComponent<RectTransform>();
-        contentRect.anchorMin = new Vector2(0f, 1f);
-        contentRect.anchorMax = new Vector2(1f, 1f);
+        contentRect.anchorMin = new Vector2(0.5f, 1f);
+        contentRect.anchorMax = new Vector2(0.5f, 1f);
         contentRect.pivot = new Vector2(0.5f, 1f);
         contentRect.anchoredPosition = Vector2.zero;
 
@@ -97,7 +97,7 @@ public sealed class CreativePanelView
         var creativeEntries = CreativeInventory.GetCreativeEntries();
         var rowCount = Mathf.CeilToInt(creativeEntries.Length / (float)columnsPerRow);
         var contentHeight = rowCount * slotSize + Mathf.Max(0, rowCount - 1) * slotSpacing;
-        contentRect.sizeDelta = new Vector2(0f, contentHeight);
+        contentRect.sizeDelta = new Vector2(gridWidth, contentHeight);
 
         Previews = new BlockItemSlotPreview[creativeEntries.Length];
         for (int i = 0; i < creativeEntries.Length; i++)
