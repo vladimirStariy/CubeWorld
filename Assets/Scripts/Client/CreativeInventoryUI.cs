@@ -5,7 +5,6 @@ public sealed class CreativeInventoryUI : MonoBehaviour, ICreativeInventorySlotH
 {
     private const float SlotSize = 44f;
     private const float SlotSpacing = 4f;
-    private const float HotbarSlotSpacing = 2f;
     private const float HotbarSlotBorder = 2f;
     private const float HotbarBottomPadding = 12f;
     private const int CreativeVisibleRows = 2;
@@ -180,17 +179,17 @@ public sealed class CreativeInventoryUI : MonoBehaviour, ICreativeInventorySlotH
         rootRect.offsetMax = Vector2.zero;
         root.AddComponent<CreativeInventoryUiMarker>();
 
-        hotbarView = new CreativeHotbarView(SlotSize, HotbarSlotSpacing, HotbarSlotBorder);
+        hotbarView = new CreativeHotbarView(SlotSize, SlotSpacing, HotbarSlotBorder);
         hotbarView.Build(root.transform, HotbarBottomPadding, inventory, this);
 
-        var hotbarGridWidth = CreativeInventory.HotbarSize * SlotSize
-                              + (CreativeInventory.HotbarSize - 1) * HotbarSlotSpacing;
+        var gridWidth = CreativeInventory.HotbarSize * SlotSize
+                        + (CreativeInventory.HotbarSize - 1) * SlotSpacing;
         var creativeViewportHeight = CreativeVisibleRows * SlotSize
                                      + (CreativeVisibleRows - 1) * SlotSpacing;
         panelView = new CreativePanelView(
             SlotSize,
             SlotSpacing,
-            hotbarGridWidth,
+            gridWidth,
             creativeViewportHeight,
             HotbarBottomPadding,
             SlotSize);

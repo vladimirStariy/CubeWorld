@@ -110,7 +110,7 @@ public sealed class ClayFormingController : MonoBehaviour
 
     public bool TryHandleShiftPlace()
     {
-        if (!configured || !IsClaySelected() || !IsShiftHeld() || !input.PlaceAction.WasPressedThisFrame())
+        if (!configured || !IsClaySelected() || !InputModifiers.IsShiftHeld() || !input.PlaceAction.WasPressedThisFrame())
         {
             return false;
         }
@@ -136,13 +136,15 @@ public sealed class ClayFormingController : MonoBehaviour
             return true;
         }
 
-        if (!server.TryPlaceClayWorksite(anchor, faceNormal, out var key, out var message))
+        var result = server.ExecuteCommand(WorldCommand.PlaceClayWorksite(anchor, faceNormal));
+        if (!result.Success)
         {
-            Debug.Log(message);
+            Debug.Log(result.Message);
             return true;
         }
 
-        pendingWorksiteKey = key;
+        WorldPlacementChanged?.Invoke();
+        pendingWorksiteKey = result.ClayWorksiteKey;
         hasPendingWorksite = true;
         OpenRecipeMenu();
         return true;
@@ -172,7 +174,7 @@ public sealed class ClayFormingController : MonoBehaviour
             return false;
         }
 
-        if (IsShiftHeld())
+        if (InputModifiers.IsShiftHeld())
         {
             return TryGetTargetWorksite(out _, out _);
         }
@@ -323,15 +325,5 @@ public sealed class ClayFormingController : MonoBehaviour
         return inventory != null
                && inventory.TryGetSelectedItem(out var item)
                && item.IsClay;
-    }
-
-    private static bool IsShiftHeld()
-    {
-        if (Keyboard.current == null)
-        {
-            return false;
-        }
-
-        return Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed;
     }
 }

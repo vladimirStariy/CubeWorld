@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public sealed class BlockWorldServer : MonoBehaviour
+public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority
 {
     [Header("World")]
     [SerializeField] private int worldWidth = 100;
@@ -11,16 +11,18 @@ public sealed class BlockWorldServer : MonoBehaviour
     [SerializeField] private int chunkSize = 16;
 
     [Header("Visuals")]
-    [SerializeField] private Texture2D dirtTexture;
-    [SerializeField] private Texture2D grassTexture;
-    [SerializeField] private Texture2D grassSideTexture;
-    [SerializeField] private Texture2D blockAtlasTexture;
     [SerializeField] private int chiselResolution = 16;
 
     private VoxelWorldStorage world;
     private Transform chunksRoot;
     private readonly ClayFormingStorage clayForming = new();
+    private readonly PlayerInventoryState playerInventory = new();
+    private readonly ContentCatalog contentCatalog = new();
     private GroundItemStorage groundItems;
+    private bool contentConfigured;
+
+    public PlayerInventoryState PlayerInventory => playerInventory;
+    public ContentCatalog ContentCatalog => contentCatalog;
 
     public Texture2D BlockAtlasTexture { get; private set; }
 
@@ -44,17 +46,6 @@ public sealed class BlockWorldServer : MonoBehaviour
             chunkSize,
             chiselResolution);
 
-        var material = BlockWorldMaterialSetup.CreateBlockMaterial(
-            dirtTexture,
-            grassTexture,
-            grassSideTexture,
-            blockAtlasTexture,
-            out var atlas);
-        BlockAtlasTexture = atlas;
-        world.SetChunkMaterial(material);
-
-        world.GenerateFlatWorld();
-        world.RebuildAllChunks();
         groundItems = new GroundItemStorage(world.IsBlockOccupied);
     }
 
@@ -97,6 +88,26 @@ public sealed class BlockWorldServer : MonoBehaviour
     public bool TryGetHitFaceOutline(Vector3Int blockPosition, Vector3 faceNormal, List<LineSegment> segments)
     {
         return BlockOutlineBuilder.TryGetHitFaceOutline(world, blockPosition, faceNormal, segments);
+    }
+
+    public bool TryBuildStickStackOutline(Vector3Int hitBlock, Vector3 faceNormal, List<LineSegment> segments)
+    {
+        return groundItems.TryBuildStickStackOutline(hitBlock, faceNormal, segments);
+    }
+
+    public bool TryBuildStickStackOutline(GroundItemSurfaceKey key, List<LineSegment> segments)
+    {
+        return groundItems.TryBuildStickStackOutline(key, segments);
+    }
+
+    public bool TryGetStickStackCount(Vector3Int hitBlock, Vector3 faceNormal, out int stickCount)
+    {
+        return groundItems.TryGetStickStackCount(hitBlock, faceNormal, out stickCount);
+    }
+
+    public bool TryGetStickStackCount(GroundItemSurfaceKey key, out int stickCount)
+    {
+        return groundItems.TryGetStickStackCount(key, out stickCount);
     }
 
     public bool HasChiseledBlockAt(Vector3Int position)
@@ -254,5 +265,33 @@ public sealed class BlockWorldServer : MonoBehaviour
     public void SetClayFormingToolMode(ClayWorksiteKey key, ClayFormingToolMode toolMode)
     {
         clayForming.SetToolMode(key, toolMode);
+    }
+
+    public WorldCommandResult ExecuteCommand(WorldCommand command)
+    {
+        return WorldCommandExecutor.Execute(command, this);
+    }
+
+    public void ConfigureContent()
+    {
+        if (contentConfigured)
+        {
+            return;
+        }
+
+        VanillaContentBootstrap.RegisterAll(contentCatalog);
+        world.SetItemUseRegistry(contentCatalog.ItemUse);
+        clayForming.SetRecipeRegistry(contentCatalog.ClayRecipes);
+        InitializeWorldVisuals();
+        contentConfigured = true;
+    }
+
+    private void InitializeWorldVisuals()
+    {
+        var material = BlockWorldMaterialSetup.CreateBlockMaterial(contentCatalog.BlockTextures, out var atlas);
+        BlockAtlasTexture = atlas;
+        world.SetChunkMaterial(material);
+        world.GenerateFlatWorld();
+        world.RebuildAllChunks();
     }
 }

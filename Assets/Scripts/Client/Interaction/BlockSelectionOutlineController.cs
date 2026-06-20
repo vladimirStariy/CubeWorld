@@ -10,6 +10,8 @@ public sealed class BlockSelectionOutlineController
 
     private BlockSelectionOutline selectionOutline;
     private Vector3Int lastOutlinedBlock = new(int.MinValue, int.MinValue, int.MinValue);
+    private Vector3Int lastOutlinedFaceNormal = Vector3Int.zero;
+    private int lastOutlinedStickCount = -1;
     private bool outlineVisible;
 
     public BlockSelectionOutlineController(BlockWorldServer server, Camera playerCamera, float interactDistance)
@@ -41,6 +43,8 @@ public sealed class BlockSelectionOutlineController
     {
         outlineVisible = false;
         lastOutlinedBlock = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
+        lastOutlinedFaceNormal = Vector3Int.zero;
+        lastOutlinedStickCount = -1;
     }
 
     public void Update()
@@ -50,14 +54,30 @@ public sealed class BlockSelectionOutlineController
             return;
         }
 
-        if (!BlockWorldTargeting.TryRaycastBlock(playerCamera, interactDistance, out var hit))
+        if (!BlockWorldTargeting.TryRaycastInteractTarget(playerCamera, interactDistance, out var target))
         {
             Hide();
             return;
         }
 
-        var blockPosition = BlockWorldTargeting.GetHitBlockPosition(hit);
-        if (outlineVisible && blockPosition == lastOutlinedBlock)
+        var blockPosition = target.BlockPosition;
+        var faceNormal = Vector3Int.RoundToInt(target.FaceNormal);
+
+        if (TryShowStickStackOutline(target, blockPosition, faceNormal))
+        {
+            return;
+        }
+
+        if (target.IsGroundItem)
+        {
+            Hide();
+            return;
+        }
+
+        if (outlineVisible
+            && blockPosition == lastOutlinedBlock
+            && faceNormal == lastOutlinedFaceNormal
+            && lastOutlinedStickCount < 0)
         {
             return;
         }
@@ -69,8 +89,51 @@ public sealed class BlockSelectionOutlineController
         }
 
         lastOutlinedBlock = blockPosition;
+        lastOutlinedFaceNormal = faceNormal;
+        lastOutlinedStickCount = -1;
         outlineVisible = true;
         selectionOutline.ShowFaceOutline(blockPosition, faceOutlineSegments);
+    }
+
+    private bool TryShowStickStackOutline(
+        WorldInteractTarget target,
+        Vector3Int blockPosition,
+        Vector3Int faceNormal)
+    {
+        int stickCount;
+        var hasStickStack = target.GroundItemKey.HasValue
+            ? server.TryGetStickStackCount(target.GroundItemKey.Value, out stickCount)
+            : server.TryGetStickStackCount(blockPosition, faceNormal, out stickCount);
+
+        if (!hasStickStack)
+        {
+            return false;
+        }
+
+        if (outlineVisible
+            && blockPosition == lastOutlinedBlock
+            && faceNormal == lastOutlinedFaceNormal
+            && stickCount == lastOutlinedStickCount)
+        {
+            return true;
+        }
+
+        var built = target.GroundItemKey.HasValue
+            ? server.TryBuildStickStackOutline(target.GroundItemKey.Value, faceOutlineSegments)
+            : server.TryBuildStickStackOutline(blockPosition, faceNormal, faceOutlineSegments);
+
+        if (!built)
+        {
+            Hide();
+            return true;
+        }
+
+        lastOutlinedBlock = blockPosition;
+        lastOutlinedFaceNormal = faceNormal;
+        lastOutlinedStickCount = stickCount;
+        outlineVisible = true;
+        selectionOutline.ShowFaceOutline(blockPosition, faceOutlineSegments);
+        return true;
     }
 
     private void Hide()

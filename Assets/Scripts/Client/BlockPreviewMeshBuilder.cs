@@ -28,7 +28,7 @@ public static class BlockPreviewMeshBuilder
         var triangles = new List<int>(144);
         var normals = new List<Vector3>(96);
         var uvs = new List<Vector2>(96);
-        var textureSlot = BlockTextureLibrary.GetFaceTextureSlot(VoxelBlockType.Dirt, BlockFace.Top);
+        var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(VoxelBlockType.Dirt, BlockFace.Top);
 
         AddBox(vertices, triangles, normals, uvs, -0.30f, 0.30f, -0.50f, -0.38f, -0.30f, 0.30f, textureSlot);
         AddBox(vertices, triangles, normals, uvs, -0.42f, 0.42f, -0.34f, -0.22f, -0.10f, 0.10f, textureSlot);
@@ -47,7 +47,7 @@ public static class BlockPreviewMeshBuilder
 
         for (int face = 0; face < VoxelConstants.NeighborDirs.Length; face++)
         {
-            var textureSlot = BlockTextureLibrary.GetFaceTextureSlot(blockType, face);
+            var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(blockType, face);
             AddFullCubeFace(face, Vector3Int.zero, textureSlot, vertices, triangles, normals, uvs);
         }
 
@@ -70,7 +70,7 @@ public static class BlockPreviewMeshBuilder
 
         for (int face = 0; face < VoxelConstants.NeighborDirs.Length; face++)
         {
-            var textureSlot = BlockTextureLibrary.GetFaceTextureSlot(blockType, face);
+            var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(blockType, face);
 
             switch (face)
             {
@@ -113,7 +113,7 @@ public static class BlockPreviewMeshBuilder
     private static void AddFullCubeFace(
         int faceIndex,
         Vector3Int local,
-        BlockTextureSlot textureSlot,
+        int textureSlot,
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
@@ -174,7 +174,7 @@ public static class BlockPreviewMeshBuilder
         Vector3 v1,
         Vector3 v2,
         Vector3 v3,
-        BlockTextureSlot textureSlot,
+        int textureSlot,
         float uv0u, float uv0v,
         float uv1u, float uv1v,
         float uv2u, float uv2v,
@@ -215,7 +215,7 @@ public static class BlockPreviewMeshBuilder
         float ymax,
         float zmin,
         float zmax,
-        BlockTextureSlot textureSlot)
+        int textureSlot)
     {
         AddQuad(vertices, triangles, normals, uvs, Vector3.right,
             new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymin, zmax),

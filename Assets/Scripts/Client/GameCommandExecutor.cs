@@ -79,7 +79,7 @@ public static class GameCommandExecutor
                 return true;
 
             case "give":
-                if (context.Inventory == null)
+                if (context.Inventory?.State == null)
                 {
                     response = "Inventory not found.";
                     return true;
@@ -87,11 +87,11 @@ public static class GameCommandExecutor
 
                 if (parts.Length < 2)
                 {
-                    response = "Usage: /give <dirt|grass|dirt_slab|grass_bundle|stick|flint|chisel|clay|clay_bowl|raw_clay_bowl> [count]";
+                    response = "Usage: /give <item_id_or_alias> [count]";
                     return true;
                 }
 
-                if (!TryParseHotbarItem(parts[1], out var item))
+                if (!TryParseHotbarItem(parts[1], context.World, out var item))
                 {
                     response = $"Unknown item: {parts[1]}";
                     return true;
@@ -109,7 +109,7 @@ public static class GameCommandExecutor
                     count = Mathf.Clamp(count, 1, 9999);
                 }
 
-                var remainder = GiveItems(context.Inventory, item, count);
+                var remainder = GiveItems(context.Inventory.State, item, count);
                 if (remainder >= count)
                 {
                     response = "Inventory is full.";
@@ -148,8 +148,13 @@ public static class GameCommandExecutor
         return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) && value > 0;
     }
 
-    private static int GiveItems(CreativeInventory inventory, HotbarItem item, int count)
+    private static int GiveItems(PlayerInventoryState inventory, HotbarItem item, int count)
     {
+        if (inventory == null)
+        {
+            return count;
+        }
+
         if (item.IsStackable)
         {
             return inventory.TryAddItem(item.WithCount(count));
@@ -169,76 +174,27 @@ public static class GameCommandExecutor
         return remainder;
     }
 
-    private static bool TryParseHotbarItem(string text, out HotbarItem item)
+    private static bool TryParseHotbarItem(string text, BlockWorldServer world, out HotbarItem item)
     {
-        if (string.Equals(text, "dirt", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.FromBlock(VoxelBlockType.Dirt);
-            return true;
-        }
-
-        if (string.Equals(text, "grass", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(text, "grass_block", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.FromBlock(VoxelBlockType.GrassBlock);
-            return true;
-        }
-
-        if (string.Equals(text, "dirt_slab", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(text, "slab", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.FromBlock(VoxelBlockType.DirtSlab);
-            return true;
-        }
-
-        if (string.Equals(text, "grass_bundle", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(text, "bundle", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.GrassBundle();
-            return true;
-        }
-
-        if (string.Equals(text, "stick", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(text, "sticks", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.Stick();
-            return true;
-        }
-
-        if (string.Equals(text, "flint", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(text, "flint_and_steel", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.Flint();
-            return true;
-        }
-
-        if (string.Equals(text, "chisel", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.Chisel();
-            return true;
-        }
-
-        if (string.Equals(text, "clay", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.Clay();
-            return true;
-        }
-
-        if (string.Equals(text, "raw_clay_bowl", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(text, "raw_bowl", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.RawClayBowl();
-            return true;
-        }
-
-        if (string.Equals(text, "clay_bowl", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(text, "bowl", StringComparison.OrdinalIgnoreCase))
-        {
-            item = HotbarItem.ClayBowl();
-            return true;
-        }
-
         item = default;
+        var registry = world?.ContentCatalog?.Items ?? ItemRegistry.Active;
+        if (registry == null)
+        {
+            return false;
+        }
+
+        if (ContentId.TryParse(text, out var contentId) && registry.TryGet(contentId, out var byId))
+        {
+            item = byId.CreateStack();
+            return true;
+        }
+
+        if (registry.TryGetByAlias(text, out var byAlias))
+        {
+            item = byAlias.CreateStack();
+            return true;
+        }
+
         return false;
     }
 }

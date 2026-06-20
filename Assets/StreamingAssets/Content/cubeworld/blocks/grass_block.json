@@ -1,0 +1,14 @@
+{
+  "id": "cubeworld:grass_block",
+  "displayName": "Grass Block",
+  "runtimeKind": "Block",
+  "blockType": "GrassBlock",
+  "capabilities": ["PlaceableBlock"],
+  "commandAliases": ["grass", "grass_block"],
+  "showInCreative": true,
+  "textures": {
+    "top": "grass_top.png",
+    "bottom": "dirt.png",
+    "side": "grass_side.png"
+  }
+}

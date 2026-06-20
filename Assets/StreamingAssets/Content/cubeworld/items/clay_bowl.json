@@ -1,0 +1,13 @@
+{
+  "id": "cubeworld:clay_bowl",
+  "displayName": "Clay Bowl",
+  "runtimeKind": "ClayBowl",
+  "capabilities": ["GroundPlaceable"],
+  "commandAliases": ["clay_bowl", "bowl"],
+  "showInCreative": true,
+  "groundPlacement": {
+    "layout": "Single",
+    "maxStackPerSlot": 1,
+    "shiftPickupAmount": 1
+  }
+}

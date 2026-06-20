@@ -14,6 +14,12 @@ public struct ClayFormingEditResult
 public sealed class ClayFormingStorage
 {
     private readonly Dictionary<ClayWorksiteKey, ClayWorksite> worksites = new();
+    private ClayFormingRecipeRegistry recipeRegistry;
+
+    public void SetRecipeRegistry(ClayFormingRecipeRegistry registry)
+    {
+        recipeRegistry = registry;
+    }
 
     public bool TryPlaceWorksite(Vector3Int anchorBlock, Vector3Int faceNormal, out ClayWorksiteKey key, out string message)
     {
@@ -65,7 +71,8 @@ public sealed class ClayFormingStorage
             return false;
         }
 
-        if (!ClayFormingRecipeLibrary.TryGet(recipeId, out var recipe))
+        var recipes = recipeRegistry ?? ClayFormingRecipeRegistry.Active;
+        if (recipes == null || !recipes.TryGet(recipeId, out var recipe))
         {
             message = $"Unknown clay recipe: {recipeId}";
             return false;

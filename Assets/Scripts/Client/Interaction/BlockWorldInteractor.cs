@@ -1,29 +1,27 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public sealed class BlockWorldInteractor
 {
+    private readonly IWorldAuthority authority;
     private readonly BlockWorldServer server;
     private readonly Camera playerCamera;
     private readonly CharacterController playerCharacterController;
-    private readonly CreativeInventory creativeInventory;
     private readonly float interactDistance;
     private readonly System.Action onWorldChanged;
     private readonly BlockEntityUiController blockEntityUi;
 
     public BlockWorldInteractor(
-        BlockWorldServer server,
+        BlockWorldServer worldServer,
         Camera playerCamera,
         CharacterController playerCharacterController,
-        CreativeInventory creativeInventory,
         float interactDistance,
         System.Action onWorldChanged,
         BlockEntityUiController blockEntityUi)
     {
-        this.server = server;
+        authority = worldServer;
+        server = worldServer;
         this.playerCamera = playerCamera;
         this.playerCharacterController = playerCharacterController;
-        this.creativeInventory = creativeInventory;
         this.interactDistance = interactDistance;
         this.onWorldChanged = onWorldChanged;
         this.blockEntityUi = blockEntityUi;
@@ -36,42 +34,57 @@ public sealed class BlockWorldInteractor
             return TryChiselSecondaryAction();
         }
 
-        if (!BlockWorldTargeting.TryRaycastBlock(playerCamera, interactDistance, out var hit))
+        if (!BlockWorldTargeting.TryRaycastInteractTarget(playerCamera, interactDistance, out var target))
         {
             return false;
         }
 
-        var hitBlock = BlockWorldTargeting.GetHitBlockPosition(hit);
-        if (TryOpenBlockEntityUi(hitBlock))
+        var hitBlock = target.BlockPosition;
+        if (!target.IsGroundItem && TryOpenBlockEntityUi(hitBlock))
         {
             return true;
         }
 
-        if (creativeInventory == null || !creativeInventory.TryGetSelectedItem(out var item))
+        if (!TryGetSelectedItem(out var item))
         {
             return false;
         }
 
-        if (item.Kind == ItemKind.Stick && !server.TryHasCampfireAssembly(hitBlock, hit.normal))
+        if (item.HasCapability(ItemCapabilities.CampfireAssemblyStick)
+            && item.HasCapability(ItemCapabilities.GroundPlaceable)
+            && !server.TryHasCampfireAssembly(hitBlock, target.FaceNormal))
         {
-            return TryPlaceGroundItem(hitBlock, hit.normal, hit.point, item);
-        }
-
-        if (item.IsAssemblyComponent)
-        {
-            if (!server.TryUseItemOnTarget(hitBlock, hit.normal, item, out var message))
+            if (!InputModifiers.IsShiftHeld())
             {
                 return false;
             }
 
-            Debug.Log(message);
-            onWorldChanged?.Invoke();
-            return true;
+            return ExecuteCommand(WorldCommand.PlaceGroundItem(hitBlock, target.FaceNormal, target.Point));
+        }
+
+        if (item.IsAssemblyComponent)
+        {
+            if (target.IsGroundItem)
+            {
+                return false;
+            }
+
+            if (!InputModifiers.IsShiftHeld())
+            {
+                return false;
+            }
+
+            return ExecuteCommand(WorldCommand.UseItemOnAssembly(hitBlock, target.FaceNormal));
         }
 
         if (item.IsGroundPlaceable)
         {
-            if (TryPlaceGroundItem(hitBlock, hit.normal, hit.point, item))
+            if (!InputModifiers.IsShiftHeld())
+            {
+                return false;
+            }
+
+            if (ExecuteCommand(WorldCommand.PlaceGroundItem(hitBlock, target.FaceNormal, target.Point)))
             {
                 return true;
             }
@@ -82,87 +95,65 @@ public sealed class BlockWorldInteractor
             return false;
         }
 
-        var targetPosition = BlockWorldTargeting.GetAdjacentBlockPosition(hit);
+        var targetPosition = BlockWorldTargeting.GetAdjacentBlockPosition(target);
         if (WouldIntersectPlayer(targetPosition, item.BlockType))
         {
             return false;
         }
 
-        if (!server.TrySetBlock(targetPosition, item.BlockType))
-        {
-            return false;
-        }
-
-        onWorldChanged?.Invoke();
-        return true;
+        return ExecuteCommand(WorldCommand.PlaceBlock(targetPosition));
     }
 
     public bool TryUseOrBreakBlock()
     {
-        if (!BlockWorldTargeting.TryRaycastBlock(playerCamera, interactDistance, out var hit))
+        if (!BlockWorldTargeting.TryRaycastInteractTarget(playerCamera, interactDistance, out var target))
         {
             return false;
         }
 
-        var targetPosition = BlockWorldTargeting.GetHitBlockPosition(hit);
+        if (target.IsGroundItem)
+        {
+            return TryPickupGroundItemTarget(target);
+        }
+
+        var targetPosition = target.BlockPosition;
 
         if (IsChiselSelected() && server.HasChiseledBlockAt(targetPosition))
         {
             return TryChiselRemoveVoxel();
         }
 
-        if (server.TryBreakCampfireAssembly(targetPosition, hit.normal, out var assemblyMessage))
+        if (TryExecuteCommand(WorldCommand.BreakCampfireAssembly(targetPosition, target.FaceNormal), logFailure: false))
         {
-            Debug.Log(assemblyMessage);
-            onWorldChanged?.Invoke();
             return true;
         }
 
-        var pickupAmount = server.ResolveGroundPickupAmount(targetPosition, hit.normal, hit.point, IsShiftHeld());
-        if (server.TryProbeGroundPickup(targetPosition, hit.normal, hit.point, pickupAmount, out var probeItem))
+        if (TryPickupGroundItemTarget(target))
         {
-            if (creativeInventory != null)
-            {
-                var canAdd = creativeInventory.GetAddableAmount(probeItem);
-                if (canAdd <= 0)
-                {
-                    Debug.Log("Inventory is full.");
-                    return true;
-                }
-
-                pickupAmount = Mathf.Min(pickupAmount, canAdd);
-            }
-
-            if (server.TryPickupGroundItem(targetPosition, hit.normal, hit.point, pickupAmount, out var pickedItem, out var pickupMessage))
-            {
-                creativeInventory?.TryAddItem(pickedItem);
-                Debug.Log(pickupMessage);
-                onWorldChanged?.Invoke();
-                return true;
-            }
+            return true;
         }
 
-        if (!server.TrySetBlock(targetPosition, VoxelBlockType.Air))
-        {
-            return false;
-        }
-
-        onWorldChanged?.Invoke();
-        return true;
+        return ExecuteCommand(WorldCommand.BreakBlock(targetPosition));
     }
 
-    private bool TryPlaceGroundItem(Vector3Int hitBlock, Vector3 faceNormal, Vector3 worldHitPoint, HotbarItem item)
+    private bool TryPickupGroundItemTarget(WorldInteractTarget target)
     {
-        if (!server.TryPlaceGroundItem(hitBlock, faceNormal, worldHitPoint, item, out var message))
+        var pickupAmount = server.ResolveGroundPickupAmount(
+            target.BlockPosition,
+            target.FaceNormal,
+            target.Point,
+            InputModifiers.IsShiftHeld());
+
+        if (pickupAmount <= 0)
         {
-            Debug.Log(message);
             return false;
         }
 
-        creativeInventory?.TryConsumeFromSelected(1, out _);
-        Debug.Log(message);
-        onWorldChanged?.Invoke();
-        return true;
+        return ExecuteCommand(WorldCommand.PickupGroundItem(
+            target.BlockPosition,
+            target.FaceNormal,
+            target.Point,
+            pickupAmount));
     }
 
     public bool TryChiselRemoveVoxel()
@@ -172,18 +163,7 @@ public sealed class BlockWorldInteractor
             return false;
         }
 
-        if (!server.HasChiseledBlockAt(blockPosition))
-        {
-            return false;
-        }
-
-        if (!server.TryChiselRemoveVoxel(blockPosition, localPoint))
-        {
-            return false;
-        }
-
-        onWorldChanged?.Invoke();
-        return true;
+        return ExecuteCommand(WorldCommand.ChiselRemove(blockPosition, localPoint));
     }
 
     public bool TryChiselAddVoxel()
@@ -193,18 +173,7 @@ public sealed class BlockWorldInteractor
             return false;
         }
 
-        if (!server.HasChiseledBlockAt(blockPosition))
-        {
-            return false;
-        }
-
-        if (!server.TryChiselAddVoxel(blockPosition, localPoint))
-        {
-            return false;
-        }
-
-        onWorldChanged?.Invoke();
-        return true;
+        return ExecuteCommand(WorldCommand.ChiselAdd(blockPosition, localPoint));
     }
 
     public bool TryChiselSecondaryAction()
@@ -220,13 +189,7 @@ public sealed class BlockWorldInteractor
             return TryChiselAddVoxel();
         }
 
-        if (!server.TryBeginChiselBlock(blockPosition))
-        {
-            return false;
-        }
-
-        onWorldChanged?.Invoke();
-        return true;
+        return ExecuteCommand(WorldCommand.ChiselBegin(blockPosition));
     }
 
     public bool TryGetLookTargetInfo(out Vector3Int blockPosition, out Vector3 faceNormal, out BlockQueryResult blockInfo)
@@ -245,21 +208,42 @@ public sealed class BlockWorldInteractor
         return server.TryQueryBlock(blockPosition, out blockInfo);
     }
 
-    private bool IsChiselSelected()
+    private bool ExecuteCommand(WorldCommand command)
     {
-        return creativeInventory != null
-               && creativeInventory.TryGetSelectedItem(out var item)
-               && item.IsChisel;
+        return TryExecuteCommand(command, logFailure: true);
     }
 
-    private static bool IsShiftHeld()
+    private bool TryExecuteCommand(WorldCommand command, bool logFailure)
     {
-        if (Keyboard.current == null)
+        var result = authority.ExecuteCommand(command);
+        if (!result.Success)
         {
+            if (logFailure && !string.IsNullOrEmpty(result.Message))
+            {
+                Debug.Log(result.Message);
+            }
+
             return false;
         }
 
-        return Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed;
+        if (!string.IsNullOrEmpty(result.Message))
+        {
+            Debug.Log(result.Message);
+        }
+
+        onWorldChanged?.Invoke();
+        return true;
+    }
+
+    private bool TryGetSelectedItem(out HotbarItem item)
+    {
+        item = default;
+        return authority.PlayerInventory != null && authority.PlayerInventory.TryGetSelectedItem(out item);
+    }
+
+    private bool IsChiselSelected()
+    {
+        return TryGetSelectedItem(out var item) && item.IsChisel;
     }
 
     private bool TryGetChiselHit(out Vector3Int blockPosition, out Vector3 localPoint, bool addVoxel)

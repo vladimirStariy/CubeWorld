@@ -58,10 +58,13 @@ public static class ItemPreviewMeshBuilder
         var vertices = new List<Vector3>();
         var triangles = new List<int>();
         var normals = new List<Vector3>();
-        AddStick(vertices, triangles, normals, yawDegrees: 0f, pitchDegrees: 0f);
+        AddStick(vertices, triangles, normals, yawDegrees: 0f, pitchDegrees: 0f, GroundStickHalfLength, GroundStickThickness);
         groundStickMesh = CreateMesh(vertices, triangles, normals);
         return groundStickMesh;
     }
+
+    public const float GroundStickHalfLength = 0.38f;
+    public const float GroundStickThickness = 0.06f;
 
     public static Mesh GetSingleStickMesh(int stickIndex)
     {
@@ -201,12 +204,17 @@ public static class ItemPreviewMeshBuilder
         return CreateMesh(vertices, triangles, normals);
     }
 
-    private static void AddStick(List<Vector3> vertices, List<int> triangles, List<Vector3> normals, float yawDegrees, float pitchDegrees)
+    private static void AddStick(
+        List<Vector3> vertices,
+        List<int> triangles,
+        List<Vector3> normals,
+        float yawDegrees,
+        float pitchDegrees,
+        float halfLength = 0.28f,
+        float thickness = 0.045f)
     {
         var rotation = Quaternion.Euler(pitchDegrees, yawDegrees, 0f);
-        var halfLength = 0.28f;
-        var thickness = 0.045f;
-        var center = rotation * new Vector3(0f, 0f, 0f);
+        var center = rotation * Vector3.zero;
 
         AddBox(
             vertices,
@@ -290,11 +298,11 @@ public static class ItemPreviewMeshBuilder
         vertices.Add(v3);
 
         triangles.Add(baseIndex + 0);
+        triangles.Add(baseIndex + 2);
         triangles.Add(baseIndex + 1);
-        triangles.Add(baseIndex + 2);
         triangles.Add(baseIndex + 0);
-        triangles.Add(baseIndex + 2);
         triangles.Add(baseIndex + 3);
+        triangles.Add(baseIndex + 2);
 
         normals.Add(normal);
         normals.Add(normal);

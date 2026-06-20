@@ -28,7 +28,18 @@ public readonly struct HotbarItem
 
     public bool IsEmpty => Kind == ItemKind.None;
 
-    public bool IsStackable => Kind != ItemKind.None && Kind != ItemKind.Chisel;
+    public bool IsStackable
+    {
+        get
+        {
+            if (TryGetDefinition(out var definition))
+            {
+                return definition.IsStackable;
+            }
+
+            return Kind != ItemKind.None && Kind != ItemKind.Chisel;
+        }
+    }
 
     public int MaxStack => IsStackable ? InventoryConstants.MaxStackSize : 1;
 
@@ -41,15 +52,71 @@ public readonly struct HotbarItem
                && BlockType == other.BlockType;
     }
 
-    public bool IsPlaceableBlock =>
-        Kind == ItemKind.Block &&
-        BlockType != VoxelBlockType.Air &&
-        BlockType != VoxelBlockType.Campfire;
+    public bool IsPlaceableBlock
+    {
+        get
+        {
+            if (TryGetDefinition(out var definition))
+            {
+                return definition.Capabilities.Has(ItemCapabilities.PlaceableBlock);
+            }
 
-    public bool IsAssemblyComponent =>
-        Kind is ItemKind.GrassBundle or ItemKind.Stick or ItemKind.Flint;
+            return Kind == ItemKind.Block
+                   && BlockType != VoxelBlockType.Air
+                   && BlockType != VoxelBlockType.Campfire;
+        }
+    }
+
+    public bool IsAssemblyComponent
+    {
+        get
+        {
+            if (TryGetDefinition(out var definition))
+            {
+                return definition.Capabilities.IsAssemblyComponent();
+            }
+
+            return Kind is ItemKind.GrassBundle or ItemKind.Stick or ItemKind.Flint;
+        }
+    }
 
     public bool IsGroundPlaceable => GroundItemPlacementProfiles.IsGroundPlaceable(Kind);
+
+    public bool IsChisel
+    {
+        get
+        {
+            if (TryGetDefinition(out var definition))
+            {
+                return definition.Capabilities.Has(ItemCapabilities.ChiselTool);
+            }
+
+            return Kind == ItemKind.Chisel;
+        }
+    }
+
+    public bool IsClay
+    {
+        get
+        {
+            if (TryGetDefinition(out var definition))
+            {
+                return definition.Capabilities.Has(ItemCapabilities.ClayMaterial);
+            }
+
+            return Kind == ItemKind.Clay;
+        }
+    }
+
+    public bool HasCapability(ItemCapabilities capability)
+    {
+        if (TryGetDefinition(out var definition))
+        {
+            return definition.Capabilities.Has(capability);
+        }
+
+        return false;
+    }
 
     public HotbarItem WithCount(int count)
     {
@@ -72,12 +139,13 @@ public readonly struct HotbarItem
 
     public static HotbarItem ClayBowl(int count = 1) => new(ItemKind.ClayBowl, count: count);
 
-    public bool IsChisel => Kind == ItemKind.Chisel;
-
-    public bool IsClay => Kind == ItemKind.Clay;
-
     public string GetDisplayName()
     {
+        if (TryGetDefinition(out var definition))
+        {
+            return FormatDisplayName(definition.DisplayName);
+        }
+
         var name = Kind switch
         {
             ItemKind.Block => BlockType.ToString(),
@@ -91,12 +159,29 @@ public readonly struct HotbarItem
             _ => string.Empty
         };
 
+        return FormatDisplayName(name);
+    }
+
+    private string FormatDisplayName(string name)
+    {
         if (Count > 1 && !string.IsNullOrEmpty(name))
         {
             return $"{name} x{Count}";
         }
 
         return name;
+    }
+
+    private bool TryGetDefinition(out ItemDefinition definition)
+    {
+        var registry = ItemRegistry.Active;
+        if (registry == null)
+        {
+            definition = null;
+            return false;
+        }
+
+        return registry.TryGet(this, out definition);
     }
 }
 

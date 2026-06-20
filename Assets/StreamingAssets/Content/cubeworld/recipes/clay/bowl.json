@@ -1,0 +1,25 @@
+{
+  "id": "bowl",
+  "displayName": "Bowl",
+  "outputItemId": "cubeworld:raw_clay_bowl",
+  "layers": [
+    {
+      "rows": [
+        "  #####  ",
+        "  #####  ",
+        "  #####  ",
+        "  #####  ",
+        "  #####  "
+      ]
+    },
+    {
+      "rows": [
+        "  #####  ",
+        "  #   #  ",
+        "  #   #  ",
+        "  #   #  ",
+        "  #####  "
+      ]
+    }
+  ]
+}

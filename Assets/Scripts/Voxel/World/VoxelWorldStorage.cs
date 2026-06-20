@@ -8,6 +8,7 @@ public sealed class VoxelWorldStorage : IVoxelBlockView
     private readonly Dictionary<Vector3Int, ChiseledBlockData> chiseledBlocks = new();
     private readonly Dictionary<Vector3Int, CampfireBlockEntity> campfires = new();
     private readonly Dictionary<Vector3Int, CampfireAssembly> campfireAssemblies = new();
+    private ItemUseRegistry itemUseRegistry;
     private readonly Transform chunksRoot;
     private readonly int worldWidth;
     private readonly int worldDepth;
@@ -140,38 +141,24 @@ public sealed class VoxelWorldStorage : IVoxelBlockView
         }
     }
 
+    public void SetItemUseRegistry(ItemUseRegistry registry)
+    {
+        itemUseRegistry = registry;
+    }
+
     public bool TryUseItemOnTarget(Vector3Int hitBlock, Vector3 faceNormal, HotbarItem item, out string message)
     {
-        switch (item.Kind)
+        var context = new ItemUseWorldContext(this);
+        var items = ItemRegistry.Active;
+        if (itemUseRegistry != null
+            && items != null
+            && itemUseRegistry.TryUse(hitBlock, faceNormal, item, context, items, out message))
         {
-            case ItemKind.GrassBundle:
-                return TryPlaceCampfireFoundation(hitBlock, faceNormal, out message);
-            case ItemKind.Stick:
-                if (!TryResolveCampfireAssembly(hitBlock, faceNormal, out _, out var stickAssembly))
-                {
-                    message = "No campfire foundation here.";
-                    return false;
-                }
-
-                return stickAssembly.TryAddStick(out message);
-            case ItemKind.Flint:
-                if (!TryResolveCampfireAssembly(hitBlock, faceNormal, out var lightAnchor, out var lightAssembly))
-                {
-                    message = "No campfire foundation here.";
-                    return false;
-                }
-
-                if (!lightAssembly.CanLight())
-                {
-                    message = $"Need {CampfireAssembly.RequiredSticks} sticks before lighting.";
-                    return false;
-                }
-
-                return TryLightCampfireAssembly(lightAnchor, out message);
-            default:
-                message = "Cannot use this item here.";
-                return false;
+            return true;
         }
+
+        message = "Cannot use this item here.";
+        return false;
     }
 
     public bool TryBreakCampfireAssembly(Vector3Int hitBlock, Vector3 faceNormal, out string message)
@@ -494,7 +481,7 @@ public sealed class VoxelWorldStorage : IVoxelBlockView
         dirtyChunks.Clear();
     }
 
-    private bool TryPlaceCampfireFoundation(Vector3Int foundationBlock, Vector3 faceNormal, out string message)
+    internal bool TryPlaceCampfireFoundation(Vector3Int foundationBlock, Vector3 faceNormal, out string message)
     {
         if (!WorldItemInteraction.IsTopFaceHit(faceNormal))
         {
@@ -526,7 +513,35 @@ public sealed class VoxelWorldStorage : IVoxelBlockView
         return true;
     }
 
-    private bool TryLightCampfireAssembly(Vector3Int anchorPosition, out string message)
+    internal bool TryAddCampfireStick(Vector3Int hitBlock, Vector3 faceNormal, out string message)
+    {
+        if (!TryResolveCampfireAssembly(hitBlock, faceNormal, out _, out var stickAssembly))
+        {
+            message = "No campfire foundation here.";
+            return false;
+        }
+
+        return stickAssembly.TryAddStick(out message);
+    }
+
+    internal bool TryLightCampfireAssembly(Vector3Int hitBlock, Vector3 faceNormal, out string message)
+    {
+        if (!TryResolveCampfireAssembly(hitBlock, faceNormal, out var lightAnchor, out var lightAssembly))
+        {
+            message = "No campfire foundation here.";
+            return false;
+        }
+
+        if (!lightAssembly.CanLight())
+        {
+            message = $"Need {CampfireAssembly.RequiredSticks} sticks before lighting.";
+            return false;
+        }
+
+        return TryLightCampfireAssemblyAtAnchor(lightAnchor, out message);
+    }
+
+    private bool TryLightCampfireAssemblyAtAnchor(Vector3Int anchorPosition, out string message)
     {
         if (!campfireAssemblies.TryGetValue(anchorPosition, out var assembly))
         {
@@ -563,7 +578,7 @@ public sealed class VoxelWorldStorage : IVoxelBlockView
         return true;
     }
 
-    private bool TryResolveCampfireAssembly(Vector3Int clickedBlock, Vector3 faceNormal, out Vector3Int anchor, out CampfireAssembly assembly)
+    internal bool TryResolveCampfireAssembly(Vector3Int clickedBlock, Vector3 faceNormal, out Vector3Int anchor, out CampfireAssembly assembly)
     {
         assembly = null;
         if (WorldItemInteraction.TryResolveAssemblyAnchor(

@@ -270,6 +270,117 @@ public sealed class GroundItemStorage
         }
     }
 
+    public bool TryGetStickStackCount(Vector3Int hitBlock, Vector3 faceNormal, out int stickCount)
+    {
+        stickCount = 0;
+        if (!TryResolveSurfaceKeyStrict(hitBlock, faceNormal, out _, out var surface))
+        {
+            return false;
+        }
+
+        if (surface.Layout != GroundPlacementLayout.Stack || surface.ItemKind != ItemKind.Stick)
+        {
+            return false;
+        }
+
+        stickCount = surface.SlotCounts[0];
+        return stickCount > 0;
+    }
+
+    public bool TryBuildStickStackOutline(
+        Vector3Int hitBlock,
+        Vector3 faceNormal,
+        List<LineSegment> segments)
+    {
+        segments.Clear();
+        if (!TryGetStickStackCount(hitBlock, faceNormal, out var stickCount))
+        {
+            return false;
+        }
+
+        return TryBuildStickStackOutlineAtBlock(
+            hitBlock,
+            Vector3Int.RoundToInt(faceNormal),
+            stickCount,
+            segments);
+    }
+
+    public bool TryGetStickStackCount(GroundItemSurfaceKey key, out int stickCount)
+    {
+        stickCount = 0;
+        if (!surfaces.TryGetValue(key, out var surface))
+        {
+            return false;
+        }
+
+        if (surface.Layout != GroundPlacementLayout.Stack || surface.ItemKind != ItemKind.Stick)
+        {
+            return false;
+        }
+
+        stickCount = surface.SlotCounts[0];
+        return stickCount > 0;
+    }
+
+    public bool TryBuildStickStackOutline(
+        GroundItemSurfaceKey key,
+        List<LineSegment> segments)
+    {
+        segments.Clear();
+        if (!TryGetStickStackCount(key, out var stickCount))
+        {
+            return false;
+        }
+
+        return TryBuildStickStackOutlineAtBlock(
+            key.FoundationBlock,
+            key.FaceNormal,
+            stickCount,
+            segments);
+    }
+
+    private static bool TryBuildStickStackOutlineAtBlock(
+        Vector3Int hitBlock,
+        Vector3Int faceNormal,
+        int stickCount,
+        List<LineSegment> segments)
+    {
+        var localSegments = new List<LineSegment>();
+        StickStackLayout.BuildOutlineSegments(stickCount, faceNormal, localSegments);
+        if (localSegments.Count == 0)
+        {
+            return false;
+        }
+
+        var blockOrigin = (Vector3)hitBlock;
+        for (int i = 0; i < localSegments.Count; i++)
+        {
+            var segment = localSegments[i];
+            segments.Add(new LineSegment(blockOrigin + segment.From, blockOrigin + segment.To));
+        }
+
+        return true;
+    }
+
+    private bool TryResolveSurfaceKeyStrict(
+        Vector3Int clickedBlock,
+        Vector3 faceNormal,
+        out GroundItemSurfaceKey key,
+        out GroundItemSurface surface)
+    {
+        key = default;
+        surface = null;
+
+        var normal = Vector3Int.RoundToInt(faceNormal);
+        if (!surfaces.TryGetValue(new GroundItemSurfaceKey(clickedBlock, normal), out surface))
+        {
+            return false;
+        }
+
+        key = surface.Key;
+        return true;
+    }
+
     public bool TryResolveSurfaceKey(
         Vector3Int clickedBlock,
         Vector3 faceNormal,
@@ -382,6 +493,11 @@ public sealed class GroundItemStorage
 
     private static HotbarItem CreateStack(ItemKind kind, int count)
     {
+        if (ItemRegistry.Active != null)
+        {
+            return ItemRegistry.Active.CreateStack(kind, count);
+        }
+
         return kind switch
         {
             ItemKind.Stick => HotbarItem.Stick(count),

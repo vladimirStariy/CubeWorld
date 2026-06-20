@@ -1,0 +1,12 @@
+{
+  "id": "cubeworld:dirt_slab",
+  "displayName": "Dirt Slab",
+  "runtimeKind": "Block",
+  "blockType": "DirtSlab",
+  "capabilities": ["PlaceableBlock"],
+  "commandAliases": ["dirt_slab", "slab"],
+  "showInCreative": true,
+  "textures": {
+    "all": "dirt.png"
+  }
+}

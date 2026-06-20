@@ -10,13 +10,6 @@ public enum BlockFace
     West
 }
 
-public enum BlockTextureSlot : byte
-{
-    Dirt = 0,
-    GrassTop = 1,
-    GrassSide = 2
-}
-
 /// <summary>
 /// Block face → atlas tile mapping. Mesh UVs stay within one atlas tile per face.
 /// </summary>
@@ -36,38 +29,50 @@ public static class BlockTextureLibrary
         public static AtlasTile FullTexture => new AtlasTile(Vector2.zero, Vector2.one);
     }
 
-    public static AtlasTile GetAtlasTile(BlockTextureSlot slot)
+    public static AtlasTile GetAtlasTile(int slotIndex)
     {
-        var tileWidth = 1f / BlockAtlasBuilder.Columns;
-        var tileHeight = 1f / BlockAtlasBuilder.Rows;
-        var column = (int)slot % BlockAtlasBuilder.Columns;
-        var row = (int)slot / BlockAtlasBuilder.Columns;
+        var columns = BlockAtlasBuilder.Columns;
+        var rows = BlockAtlasBuilder.Rows;
+        var tileWidth = 1f / columns;
+        var tileHeight = 1f / rows;
+        var column = slotIndex % columns;
+        var row = slotIndex / columns;
         return new AtlasTile(new Vector2(column * tileWidth, row * tileHeight), new Vector2(tileWidth, tileHeight));
     }
 
     public static AtlasTile GetTile(VoxelBlockType blockType, BlockFace face)
     {
-        return GetAtlasTile(GetFaceTextureSlot(blockType, face));
+        return GetAtlasTile(GetFaceAtlasSlot(blockType, face));
     }
 
-    public static BlockTextureSlot GetFaceTextureSlot(VoxelBlockType blockType, BlockFace face)
+    public static int GetFaceAtlasSlot(VoxelBlockType blockType, BlockFace face)
+    {
+        if (BlockTextureRegistry.Active != null)
+        {
+            return BlockTextureRegistry.Active.GetAtlasSlot(blockType, face);
+        }
+
+        return GetLegacyFaceAtlasSlot(blockType, face);
+    }
+
+    public static int GetFaceAtlasSlot(VoxelBlockType blockType, int faceIndex)
+    {
+        return GetFaceAtlasSlot(blockType, FaceIndexToBlockFace(faceIndex));
+    }
+
+    private static int GetLegacyFaceAtlasSlot(VoxelBlockType blockType, BlockFace face)
     {
         if (blockType == VoxelBlockType.GrassBlock)
         {
             return face switch
             {
-                BlockFace.Top => BlockTextureSlot.GrassTop,
-                BlockFace.Bottom => BlockTextureSlot.Dirt,
-                _ => BlockTextureSlot.GrassSide
+                BlockFace.Top => 1,
+                BlockFace.Bottom => 0,
+                _ => 2
             };
         }
 
-        return BlockTextureSlot.Dirt;
-    }
-
-    public static BlockTextureSlot GetFaceTextureSlot(VoxelBlockType blockType, int faceIndex)
-    {
-        return GetFaceTextureSlot(blockType, FaceIndexToBlockFace(faceIndex));
+        return 0;
     }
 
     public static BlockFace FaceIndexToBlockFace(int faceIndex)
@@ -87,9 +92,9 @@ public static class BlockTextureLibrary
     /// <summary>
     /// Map 0..1 tile coordinates into atlas UV space, inset by half a texel to avoid bleeding.
     /// </summary>
-    public static Vector2 GetAtlasUv(BlockTextureSlot textureSlot, float tileU, float tileV)
+    public static Vector2 GetAtlasUv(int atlasSlot, float tileU, float tileV)
     {
-        var tile = GetAtlasTile(textureSlot);
+        var tile = GetAtlasTile(atlasSlot);
         var inset = 0.5f / BlockAtlasBuilder.DefaultTileSize;
         tileU = Mathf.Lerp(inset, 1f - inset, tileU);
         tileV = Mathf.Lerp(inset, 1f - inset, tileV);

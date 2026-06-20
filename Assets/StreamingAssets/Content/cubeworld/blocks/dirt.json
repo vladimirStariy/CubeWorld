@@ -1,0 +1,12 @@
+{
+  "id": "cubeworld:dirt",
+  "displayName": "Dirt",
+  "runtimeKind": "Block",
+  "blockType": "Dirt",
+  "capabilities": ["PlaceableBlock"],
+  "commandAliases": ["dirt"],
+  "showInCreative": true,
+  "textures": {
+    "all": "dirt.png"
+  }
+}

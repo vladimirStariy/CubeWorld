@@ -1,0 +1,8 @@
+{
+  "id": "cubeworld:chisel",
+  "displayName": "Chisel",
+  "runtimeKind": "Chisel",
+  "capabilities": ["ChiselTool"],
+  "commandAliases": ["chisel"],
+  "showInCreative": true
+}

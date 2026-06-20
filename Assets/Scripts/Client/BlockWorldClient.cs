@@ -122,8 +122,6 @@ public sealed class BlockWorldClient : MonoBehaviour
 
             playerCharacterController,
 
-            creativeInventory,
-
             interactDistance,
 
             OnWorldChanged,

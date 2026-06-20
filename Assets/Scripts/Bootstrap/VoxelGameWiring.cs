@@ -24,12 +24,14 @@ public sealed class VoxelGameWiring
             : VoxelGameObjectFactory.CreateHudRoot(parent);
 
         WorldServer = Require(references.WorldServer, () => VoxelGameObjectFactory.CreateWorldServer(parent));
+        WorldServer.ConfigureContent();
         PlayerController = Require(references.PlayerController, () => VoxelGameObjectFactory.CreatePlayer(parent));
         PlayerCamera = references.PlayerCamera != null
             ? references.PlayerCamera
             : PlayerController.GetComponentInChildren<Camera>();
 
         CreativeInventory = Require(references.CreativeInventory, () => VoxelGameObjectFactory.CreateCreativeInventory(parent));
+        CreativeInventory.Bind(WorldServer.PlayerInventory);
         CommandConsole = Require(references.CommandConsole, () => VoxelGameObjectFactory.CreateCommandConsole(parent));
         CreativeInventoryUi = Require(references.CreativeInventoryUi, () => VoxelGameObjectFactory.CreateCreativeInventoryUi(parent));
         ClayFormingController = Require(references.ClayFormingController, () => VoxelGameObjectFactory.CreateClayFormingController(parent));

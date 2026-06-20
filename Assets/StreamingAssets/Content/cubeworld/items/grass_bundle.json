@@ -1,0 +1,8 @@
+{
+  "id": "cubeworld:grass_bundle",
+  "displayName": "Grass",
+  "runtimeKind": "GrassBundle",
+  "capabilities": ["CampfireFoundation"],
+  "commandAliases": ["grass_bundle", "bundle"],
+  "showInCreative": true
+}

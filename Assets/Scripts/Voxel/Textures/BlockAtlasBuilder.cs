@@ -5,8 +5,6 @@ using UnityEditor;
 
 public static class BlockAtlasBuilder
 {
-    public const int Columns = 3;
-    public const int Rows = 1;
     public const int DefaultTileSize = 32;
 
     public static Texture2D Build(Texture2D dirt, Texture2D grassTop, Texture2D grassSide)
@@ -18,7 +16,7 @@ public static class BlockAtlasBuilder
 
         var tileWidth = dirt.width;
         var tileHeight = dirt.height;
-        var atlas = new Texture2D(tileWidth * Columns, tileHeight * Rows, TextureFormat.RGBA32, true, false)
+        var atlas = new Texture2D(tileWidth * 3, tileHeight, TextureFormat.RGBA32, true, false)
         {
             filterMode = FilterMode.Point,
             wrapMode = TextureWrapMode.Clamp,
@@ -31,6 +29,47 @@ public static class BlockAtlasBuilder
         atlas.Apply(true, false);
         return atlas;
     }
+
+    public static Texture2D BuildDynamic(Texture2D[] tiles, out int columns, out int rows)
+    {
+        columns = 1;
+        rows = 1;
+        if (tiles == null || tiles.Length == 0 || tiles[0] == null)
+        {
+            return null;
+        }
+
+        columns = Mathf.Max(1, Mathf.CeilToInt(Mathf.Sqrt(tiles.Length)));
+        rows = Mathf.Max(1, Mathf.CeilToInt(tiles.Length / (float)columns));
+
+        var tileWidth = tiles[0].width;
+        var tileHeight = tiles[0].height;
+        var atlas = new Texture2D(tileWidth * columns, tileHeight * rows, TextureFormat.RGBA32, true, false)
+        {
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp,
+            name = "BlockAtlas_Runtime"
+        };
+
+        for (int i = 0; i < tiles.Length; i++)
+        {
+            if (tiles[i] == null)
+            {
+                continue;
+            }
+
+            var column = i % columns;
+            var row = i / columns;
+            CopyTile(tiles[i], atlas, column * tileWidth, row * tileHeight, tileWidth, tileHeight);
+        }
+
+        atlas.Apply(true, false);
+        return atlas;
+    }
+
+    public static int Columns => BlockTextureRegistry.Active?.AtlasColumns ?? 3;
+
+    public static int Rows => BlockTextureRegistry.Active?.AtlasRows ?? 1;
 
     public static Texture2D ResolveDefaultDirtTexture(Texture2D assigned)
     {

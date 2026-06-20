@@ -104,7 +104,7 @@ public static class ChunkMeshBuilder
                     }
 
                     var blockType = world.GetBlock(blockWorld);
-                    var textureSlot = BlockTextureLibrary.GetFaceTextureSlot(blockType, faceIndex);
+                    var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(blockType, faceIndex);
                     AddSingleBlockFace(faceIndex, local, textureSlot, vertices, triangles, normals, uvs);
                 }
             }
@@ -114,7 +114,7 @@ public static class ChunkMeshBuilder
     private static void AddSingleBlockFace(
         int faceIndex,
         Vector3Int local,
-        BlockTextureSlot textureSlot,
+        int textureSlot,
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
@@ -165,12 +165,12 @@ public static class ChunkMeshBuilder
         }
     }
 
-    private static Vector2 AtlasTileUv(BlockTextureSlot slot, float tileU, float tileV)
+    private static Vector2 AtlasTileUv(int slot, float tileU, float tileV)
     {
         return BlockTextureLibrary.GetAtlasUv(slot, tileU, tileV);
     }
 
-    private static Vector2 AtlasUvBlockLocal(int faceIndex, Vector3 blockLocal, BlockTextureSlot slot)
+    private static Vector2 AtlasUvBlockLocal(int faceIndex, Vector3 blockLocal, int slot)
     {
         float tileU;
         float tileV;
@@ -231,7 +231,7 @@ public static class ChunkMeshBuilder
                 continue;
             }
 
-            var textureSlot = BlockTextureLibrary.GetFaceTextureSlot(blockType, face);
+            var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(blockType, face);
 
             switch (face)
             {
@@ -348,7 +348,7 @@ public static class ChunkMeshBuilder
         List<Vector2> uvs)
     {
         var blockOffset = (Vector3)blockWorld - (Vector3)chunkWorldOrigin;
-        var textureSlot = BlockTextureLibrary.GetFaceTextureSlot(VoxelBlockType.Dirt, BlockFace.Top);
+        var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(VoxelBlockType.Dirt, BlockFace.Top);
 
         // Ash bed.
         AddTexturedBox(world, blockWorld, blockOffset, -0.30f, 0.30f, -0.50f, -0.38f, -0.30f, 0.30f, textureSlot, vertices, triangles, normals, uvs);
@@ -369,7 +369,7 @@ public static class ChunkMeshBuilder
         float ymax,
         float zmin,
         float zmax,
-        BlockTextureSlot textureSlot,
+        int textureSlot,
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
@@ -646,7 +646,7 @@ public static class ChunkMeshBuilder
                 break;
         }
 
-        var textureSlot = BlockTextureLibrary.GetFaceTextureSlot(blockType, faceIndex);
+        var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(blockType, faceIndex);
 
         AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
             v0, v1, v2, v3,

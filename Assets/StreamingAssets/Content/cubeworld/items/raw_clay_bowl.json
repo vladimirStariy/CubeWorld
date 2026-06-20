@@ -1,0 +1,13 @@
+{
+  "id": "cubeworld:raw_clay_bowl",
+  "displayName": "Raw Clay Bowl",
+  "runtimeKind": "RawClayBowl",
+  "capabilities": ["GroundPlaceable"],
+  "commandAliases": ["raw_clay_bowl", "raw_bowl"],
+  "showInCreative": true,
+  "groundPlacement": {
+    "layout": "Dual",
+    "maxStackPerSlot": 1,
+    "shiftPickupAmount": 1
+  }
+}

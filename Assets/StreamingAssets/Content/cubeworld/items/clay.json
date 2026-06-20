@@ -1,0 +1,13 @@
+{
+  "id": "cubeworld:clay",
+  "displayName": "Clay",
+  "runtimeKind": "Clay",
+  "capabilities": ["GroundPlaceable", "ClayMaterial"],
+  "commandAliases": ["clay"],
+  "showInCreative": true,
+  "groundPlacement": {
+    "layout": "Pile",
+    "maxStackPerSlot": 64,
+    "shiftPickupAmount": 1
+  }
+}

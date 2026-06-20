@@ -1,0 +1,13 @@
+{
+  "id": "cubeworld:stick",
+  "displayName": "Stick",
+  "runtimeKind": "Stick",
+  "capabilities": ["GroundPlaceable", "CampfireAssemblyStick"],
+  "commandAliases": ["stick", "sticks"],
+  "showInCreative": true,
+  "groundPlacement": {
+    "layout": "Stack",
+    "maxStackPerSlot": 42,
+    "shiftPickupAmount": 4
+  }
+}

@@ -2,12 +2,7 @@ using UnityEngine;
 
 public static class BlockWorldMaterialSetup
 {
-    public static Material CreateBlockMaterial(
-        Texture2D dirtTexture,
-        Texture2D grassTexture,
-        Texture2D grassSideTexture,
-        Texture2D prebuiltAtlas,
-        out Texture2D atlasTexture)
+    public static Material CreateBlockMaterial(BlockTextureRegistry registry, out Texture2D atlasTexture)
     {
         atlasTexture = null;
         var litShader = Shader.Find("Universal Render Pipeline/Lit");
@@ -17,29 +12,17 @@ public static class BlockWorldMaterialSetup
             return null;
         }
 
-        var dirt = BlockAtlasBuilder.ResolveDefaultDirtTexture(dirtTexture);
-        var grassTop = BlockAtlasBuilder.ResolveDefaultGrassTexture(grassTexture);
-        var grassSide = BlockAtlasBuilder.ResolveDefaultGrassSideTexture(grassSideTexture);
-        if (dirt == null || grassTop == null || grassSide == null)
+        if (registry == null || !registry.TryGetAtlas(out atlasTexture))
         {
-            Debug.LogWarning(
-                $"BlockWorldMaterialSetup: missing textures (dirt={dirt != null}, grassTop={grassTop != null}, grassSide={grassSide != null}).");
+            Debug.LogWarning("BlockWorldMaterialSetup: block atlas not built from content packs, using fallback color.");
             return CreateFallbackMaterial(litShader);
         }
 
-        var atlas = prebuiltAtlas != null ? prebuiltAtlas : BlockAtlasBuilder.Build(dirt, grassTop, grassSide);
-        if (atlas == null)
-        {
-            Debug.LogWarning("BlockWorldMaterialSetup: block atlas not found, using fallback color.");
-            return CreateFallbackMaterial(litShader);
-        }
-
-        atlas.wrapMode = TextureWrapMode.Clamp;
-        atlas.filterMode = FilterMode.Point;
-        atlasTexture = atlas;
+        atlasTexture.wrapMode = TextureWrapMode.Clamp;
+        atlasTexture.filterMode = FilterMode.Point;
 
         var material = new Material(litShader);
-        material.SetTexture("_BaseMap", atlas);
+        material.SetTexture("_BaseMap", atlasTexture);
         material.SetColor("_BaseColor", Color.white);
         material.SetFloat("_Smoothness", 0.1f);
         material.SetFloat("_Metallic", 0f);

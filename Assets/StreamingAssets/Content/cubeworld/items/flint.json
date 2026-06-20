@@ -1,0 +1,13 @@
+{
+  "id": "cubeworld:flint",
+  "displayName": "Flint",
+  "runtimeKind": "Flint",
+  "capabilities": ["GroundPlaceable", "CampfireIgniter"],
+  "commandAliases": ["flint", "flint_and_steel"],
+  "showInCreative": true,
+  "groundPlacement": {
+    "layout": "Pile",
+    "maxStackPerSlot": 64,
+    "shiftPickupAmount": 1
+  }
+}
