@@ -28,6 +28,16 @@ public static class ItemPreviewMeshBuilder
             return cached;
         }
 
+        if (ItemRegistry.Active != null
+            && ItemRegistry.Active.TryGet(kind, VoxelBlockType.Air, out var definition)
+            && !string.IsNullOrEmpty(definition.ShapeId.Name)
+            && ItemShapeMeshBuilder.TryGetFullMesh(definition.ShapeId, out cached)
+            && cached != null)
+        {
+            Meshes[kind] = cached;
+            return cached;
+        }
+
         cached = kind switch
         {
             ItemKind.GrassBundle => BuildGrassBundleMesh(),

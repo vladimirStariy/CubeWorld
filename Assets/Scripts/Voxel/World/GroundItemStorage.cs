@@ -345,8 +345,13 @@ public sealed class GroundItemStorage
         int stickCount,
         List<LineSegment> segments)
     {
+        if (!GroundItemPlacementProfiles.TryGet(ItemKind.Stick, out var profile))
+        {
+            return false;
+        }
+
         var localSegments = new List<LineSegment>();
-        StickStackLayout.BuildOutlineSegments(stickCount, faceNormal, localSegments);
+        GroundStackMath.BuildOutlineSegments(stickCount, profile, faceNormal, localSegments);
         if (localSegments.Count == 0)
         {
             return false;

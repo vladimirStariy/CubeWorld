@@ -50,4 +50,8 @@ public readonly struct ContentId : IEquatable<ContentId>
     public override int GetHashCode() => HashCode.Combine(Namespace, Name);
 
     public override string ToString() => $"{Namespace}:{Name}";
+
+    public static bool operator ==(ContentId left, ContentId right) => left.Equals(right);
+
+    public static bool operator !=(ContentId left, ContentId right) => !left.Equals(right);
 }

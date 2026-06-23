@@ -5,7 +5,7 @@ public sealed class BlockEntityUiController : MonoBehaviour
 {
     private const int MaxActionButtons = 4;
 
-    private BlockWorldServer worldServer;
+    private IWorldAuthority authority;
     private FirstPersonCharacterController playerController;
     private BlockEntityUiRegistry registry;
     private RectTransform root;
@@ -25,7 +25,7 @@ public sealed class BlockEntityUiController : MonoBehaviour
 
     public void Configure(
         Canvas hudCanvas,
-        BlockWorldServer server,
+        IWorldAuthority worldAuthority,
         FirstPersonCharacterController player,
         BlockEntityUiRegistry uiRegistry)
     {
@@ -34,7 +34,7 @@ public sealed class BlockEntityUiController : MonoBehaviour
             return;
         }
 
-        worldServer = server;
+        authority = worldAuthority;
         playerController = player;
         registry = uiRegistry;
         BuildUi(hudCanvas);
@@ -44,7 +44,7 @@ public sealed class BlockEntityUiController : MonoBehaviour
 
     public bool TryOpen(Vector3Int blockPosition)
     {
-        if (!configured || registry == null || !registry.TryGetProvider(blockPosition, worldServer, out var provider))
+        if (!configured || registry == null || !registry.TryGetProvider(blockPosition, authority, out var provider))
         {
             return false;
         }
@@ -82,7 +82,7 @@ public sealed class BlockEntityUiController : MonoBehaviour
 
     private bool RebuildState()
     {
-        if (currentProvider == null || !currentProvider.TryBuildState(currentBlock, worldServer, currentStatus, out var state))
+        if (currentProvider == null || !currentProvider.TryBuildState(currentBlock, authority, currentStatus, out var state))
         {
             return false;
         }
@@ -132,7 +132,7 @@ public sealed class BlockEntityUiController : MonoBehaviour
             return;
         }
 
-        if (currentProvider.TryHandleAction(currentBlock, worldServer, actionId, out var message))
+        if (currentProvider.TryHandleAction(currentBlock, authority, actionId, out var message))
         {
             currentStatus = message;
             RebuildState();

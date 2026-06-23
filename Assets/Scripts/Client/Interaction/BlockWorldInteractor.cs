@@ -2,8 +2,8 @@ using UnityEngine;
 
 public sealed class BlockWorldInteractor
 {
+    private readonly IGameServerConnection connection;
     private readonly IWorldAuthority authority;
-    private readonly BlockWorldServer server;
     private readonly Camera playerCamera;
     private readonly CharacterController playerCharacterController;
     private readonly float interactDistance;
@@ -11,15 +11,15 @@ public sealed class BlockWorldInteractor
     private readonly BlockEntityUiController blockEntityUi;
 
     public BlockWorldInteractor(
-        BlockWorldServer worldServer,
+        IGameServerConnection serverConnection,
         Camera playerCamera,
         CharacterController playerCharacterController,
         float interactDistance,
         System.Action onWorldChanged,
         BlockEntityUiController blockEntityUi)
     {
-        authority = worldServer;
-        server = worldServer;
+        connection = serverConnection;
+        authority = serverConnection.Authority;
         this.playerCamera = playerCamera;
         this.playerCharacterController = playerCharacterController;
         this.interactDistance = interactDistance;
@@ -52,7 +52,7 @@ public sealed class BlockWorldInteractor
 
         if (item.HasCapability(ItemCapabilities.CampfireAssemblyStick)
             && item.HasCapability(ItemCapabilities.GroundPlaceable)
-            && !server.TryHasCampfireAssembly(hitBlock, target.FaceNormal))
+            && !authority.TryHasCampfireAssembly(hitBlock, target.FaceNormal))
         {
             if (!InputModifiers.IsShiftHeld())
             {
@@ -118,7 +118,7 @@ public sealed class BlockWorldInteractor
 
         var targetPosition = target.BlockPosition;
 
-        if (IsChiselSelected() && server.HasChiseledBlockAt(targetPosition))
+        if (IsChiselSelected() && authority.HasChiseledBlockAt(targetPosition))
         {
             return TryChiselRemoveVoxel();
         }
@@ -138,7 +138,7 @@ public sealed class BlockWorldInteractor
 
     private bool TryPickupGroundItemTarget(WorldInteractTarget target)
     {
-        var pickupAmount = server.ResolveGroundPickupAmount(
+        var pickupAmount = authority.ResolveGroundPickupAmount(
             target.BlockPosition,
             target.FaceNormal,
             target.Point,
@@ -184,7 +184,7 @@ public sealed class BlockWorldInteractor
         }
 
         var blockPosition = BlockWorldTargeting.GetHitBlockPosition(hit);
-        if (server.HasChiseledBlockAt(blockPosition))
+        if (authority.HasChiseledBlockAt(blockPosition))
         {
             return TryChiselAddVoxel();
         }
@@ -205,7 +205,7 @@ public sealed class BlockWorldInteractor
 
         blockPosition = BlockWorldTargeting.GetHitBlockPosition(hit);
         faceNormal = hit.normal;
-        return server.TryQueryBlock(blockPosition, out blockInfo);
+        return authority.TryQueryBlock(blockPosition, out blockInfo);
     }
 
     private bool ExecuteCommand(WorldCommand command)
@@ -215,7 +215,7 @@ public sealed class BlockWorldInteractor
 
     private bool TryExecuteCommand(WorldCommand command, bool logFailure)
     {
-        var result = authority.ExecuteCommand(command);
+        var result = connection.ExecuteCommand(command);
         if (!result.Success)
         {
             if (logFailure && !string.IsNullOrEmpty(result.Message))

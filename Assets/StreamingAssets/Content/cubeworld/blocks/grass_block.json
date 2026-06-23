@@ -1,5 +1,6 @@
 {
   "id": "cubeworld:grass_block",
+  "shape": "base:cube",
   "displayName": "Grass Block",
   "runtimeKind": "Block",
   "blockType": "GrassBlock",

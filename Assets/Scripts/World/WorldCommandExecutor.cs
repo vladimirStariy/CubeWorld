@@ -10,48 +10,52 @@ public static class WorldCommandExecutor
         }
 
         var inventory = authority.PlayerInventory;
-        var server = authority as BlockWorldServer;
 
         switch (command.Kind)
         {
             case WorldCommandKind.PlaceBlock:
-                return TryPlaceBlock(command, server, inventory);
+                return TryPlaceBlock(command, authority, inventory);
             case WorldCommandKind.BreakBlock:
-                return TryBreakBlock(command, server);
+                return TryBreakBlock(command, authority);
             case WorldCommandKind.PlaceGroundItem:
-                return TryPlaceGroundItem(command, server, inventory);
+                return TryPlaceGroundItem(command, authority, inventory);
             case WorldCommandKind.PickupGroundItem:
-                return TryPickupGroundItem(command, server, inventory);
+                return TryPickupGroundItem(command, authority, inventory);
             case WorldCommandKind.UseItemOnAssembly:
-                return TryUseItemOnAssembly(command, server, inventory);
+                return TryUseItemOnAssembly(command, authority, inventory);
             case WorldCommandKind.BreakCampfireAssembly:
-                return TryBreakCampfireAssembly(command, server);
+                return TryBreakCampfireAssembly(command, authority);
             case WorldCommandKind.PlaceClayWorksite:
-                return TryPlaceClayWorksite(command, server, inventory);
+                return TryPlaceClayWorksite(command, authority, inventory);
+            case WorldCommandKind.StartClayForming:
+                return TryStartClayForming(command, authority);
+            case WorldCommandKind.RemoveClayWorksite:
+                return TryRemoveClayWorksite(command, authority);
+            case WorldCommandKind.ClayFormingAdd:
+                return TryClayFormingAdd(command, authority);
+            case WorldCommandKind.ClayFormingRemove:
+                return TryClayFormingRemove(command, authority);
+            case WorldCommandKind.SetClayFormingToolMode:
+                return TrySetClayFormingToolMode(command, authority);
             case WorldCommandKind.ChiselBegin:
-                return TryChiselBegin(command, server);
+                return TryChiselBegin(command, authority);
             case WorldCommandKind.ChiselRemove:
-                return TryChiselRemove(command, server);
+                return TryChiselRemove(command, authority);
             case WorldCommandKind.ChiselAdd:
-                return TryChiselAdd(command, server);
+                return TryChiselAdd(command, authority);
             default:
                 return WorldCommandResult.Fail($"Unsupported command: {command.Kind}");
         }
     }
 
-    private static WorldCommandResult TryPlaceBlock(WorldCommand command, BlockWorldServer server, PlayerInventoryState inventory)
+    private static WorldCommandResult TryPlaceBlock(WorldCommand command, IWorldAuthority authority, PlayerInventoryState inventory)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
         if (!inventory.TryGetSelectedItem(out var item) || !item.IsPlaceableBlock)
         {
             return WorldCommandResult.Fail("No placeable block selected.");
         }
 
-        if (!server.TrySetBlock(command.TargetBlockPosition, item.BlockType))
+        if (!authority.TrySetBlock(command.TargetBlockPosition, item.BlockType))
         {
             return WorldCommandResult.Fail("Cannot place block here.");
         }
@@ -60,14 +64,9 @@ public static class WorldCommandExecutor
         return WorldCommandResult.Ok();
     }
 
-    private static WorldCommandResult TryBreakBlock(WorldCommand command, BlockWorldServer server)
+    private static WorldCommandResult TryBreakBlock(WorldCommand command, IWorldAuthority authority)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
-        if (!server.TrySetBlock(command.BlockPosition, VoxelBlockType.Air))
+        if (!authority.TrySetBlock(command.BlockPosition, VoxelBlockType.Air))
         {
             return WorldCommandResult.Fail("Cannot break block.");
         }
@@ -75,19 +74,14 @@ public static class WorldCommandExecutor
         return WorldCommandResult.Ok();
     }
 
-    private static WorldCommandResult TryPlaceGroundItem(WorldCommand command, BlockWorldServer server, PlayerInventoryState inventory)
+    private static WorldCommandResult TryPlaceGroundItem(WorldCommand command, IWorldAuthority authority, PlayerInventoryState inventory)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
         if (!inventory.TryGetSelectedItem(out var item) || !item.IsGroundPlaceable)
         {
             return WorldCommandResult.Fail("No ground-placeable item selected.");
         }
 
-        if (!server.TryPlaceGroundItem(
+        if (!authority.TryPlaceGroundItem(
                 command.BlockPosition,
                 command.FaceNormal,
                 command.WorldHitPoint,
@@ -101,20 +95,15 @@ public static class WorldCommandExecutor
         return WorldCommandResult.Ok(message);
     }
 
-    private static WorldCommandResult TryPickupGroundItem(WorldCommand command, BlockWorldServer server, PlayerInventoryState inventory)
+    private static WorldCommandResult TryPickupGroundItem(WorldCommand command, IWorldAuthority authority, PlayerInventoryState inventory)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
         var pickupAmount = command.PickupAmount;
         if (pickupAmount <= 0)
         {
             return WorldCommandResult.Fail("Nothing to pick up.");
         }
 
-        if (!server.TryProbeGroundPickup(
+        if (!authority.TryProbeGroundPickup(
                 command.BlockPosition,
                 command.FaceNormal,
                 command.WorldHitPoint,
@@ -132,7 +121,7 @@ public static class WorldCommandExecutor
 
         pickupAmount = Mathf.Min(pickupAmount, canAdd);
 
-        if (!server.TryPickupGroundItem(
+        if (!authority.TryPickupGroundItem(
                 command.BlockPosition,
                 command.FaceNormal,
                 command.WorldHitPoint,
@@ -147,19 +136,14 @@ public static class WorldCommandExecutor
         return WorldCommandResult.Ok(message);
     }
 
-    private static WorldCommandResult TryUseItemOnAssembly(WorldCommand command, BlockWorldServer server, PlayerInventoryState inventory)
+    private static WorldCommandResult TryUseItemOnAssembly(WorldCommand command, IWorldAuthority authority, PlayerInventoryState inventory)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
         if (!inventory.TryGetSelectedItem(out var item) || !item.IsAssemblyComponent)
         {
             return WorldCommandResult.Fail("Invalid assembly item.");
         }
 
-        if (!server.TryUseItemOnTarget(command.BlockPosition, command.FaceNormal, item, out var message))
+        if (!authority.TryUseItemOnTarget(command.BlockPosition, command.FaceNormal, item, out var message))
         {
             return WorldCommandResult.Fail(message);
         }
@@ -168,14 +152,9 @@ public static class WorldCommandExecutor
         return WorldCommandResult.Ok(message);
     }
 
-    private static WorldCommandResult TryBreakCampfireAssembly(WorldCommand command, BlockWorldServer server)
+    private static WorldCommandResult TryBreakCampfireAssembly(WorldCommand command, IWorldAuthority authority)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
-        if (!server.TryBreakCampfireAssembly(command.BlockPosition, command.FaceNormal, out var message))
+        if (!authority.TryBreakCampfireAssembly(command.BlockPosition, command.FaceNormal, out var message))
         {
             return WorldCommandResult.Fail(message);
         }
@@ -183,19 +162,14 @@ public static class WorldCommandExecutor
         return WorldCommandResult.Ok(message);
     }
 
-    private static WorldCommandResult TryPlaceClayWorksite(WorldCommand command, BlockWorldServer server, PlayerInventoryState inventory)
+    private static WorldCommandResult TryPlaceClayWorksite(WorldCommand command, IWorldAuthority authority, PlayerInventoryState inventory)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
         if (!inventory.TryGetSelectedItem(out var item) || !item.IsClay)
         {
             return WorldCommandResult.Fail("Need clay in hand.");
         }
 
-        if (!server.TryPlaceClayWorksite(
+        if (!authority.TryPlaceClayWorksite(
                 command.BlockPosition,
                 Vector3Int.RoundToInt(command.FaceNormal),
                 out var key,
@@ -205,17 +179,67 @@ public static class WorldCommandExecutor
         }
 
         inventory.TryConsumeFromSelected(1, out _);
+        ClayFormingEvents.RaiseWorksiteChanged(key);
         return WorldCommandResult.ClayWorksitePlaced(key, message);
     }
 
-    private static WorldCommandResult TryChiselBegin(WorldCommand command, BlockWorldServer server)
+    private static WorldCommandResult TryStartClayForming(WorldCommand command, IWorldAuthority authority)
     {
-        if (server == null)
+        var key = command.GetClayWorksiteKey();
+        if (!authority.TryStartClayForming(key, command.RecipeId, out var message))
         {
-            return WorldCommandResult.Fail("World server is not ready.");
+            return WorldCommandResult.Fail(message);
         }
 
-        if (!server.TryBeginChiselBlock(command.BlockPosition))
+        ClayFormingEvents.RaiseWorksiteChanged(key);
+        return WorldCommandResult.Ok(message);
+    }
+
+    private static WorldCommandResult TryRemoveClayWorksite(WorldCommand command, IWorldAuthority authority)
+    {
+        var key = command.GetClayWorksiteKey();
+        authority.RemoveClayWorksite(key);
+        ClayFormingEvents.RaiseWorksiteChanged(key);
+        return WorldCommandResult.Ok();
+    }
+
+    private static WorldCommandResult TryClayFormingAdd(WorldCommand command, IWorldAuthority authority)
+    {
+        var key = command.GetClayWorksiteKey();
+        var edit = authority.TryClayFormingAdd(key, command.ClayCellU, command.ClayCellV);
+        if (!edit.Changed)
+        {
+            return WorldCommandResult.Fail("No clay change.");
+        }
+
+        ClayFormingEvents.RaiseWorksiteChanged(key);
+        return WorldCommandResult.FromClayEdit(edit);
+    }
+
+    private static WorldCommandResult TryClayFormingRemove(WorldCommand command, IWorldAuthority authority)
+    {
+        var key = command.GetClayWorksiteKey();
+        var edit = authority.TryClayFormingRemove(key, command.ClayCellU, command.ClayCellV);
+        if (!edit.Changed)
+        {
+            return WorldCommandResult.Fail("No clay change.");
+        }
+
+        ClayFormingEvents.RaiseWorksiteChanged(key);
+        return WorldCommandResult.FromClayEdit(edit);
+    }
+
+    private static WorldCommandResult TrySetClayFormingToolMode(WorldCommand command, IWorldAuthority authority)
+    {
+        var key = command.GetClayWorksiteKey();
+        authority.SetClayFormingToolMode(key, (ClayFormingToolMode)command.ClayToolModeValue);
+        ClayFormingEvents.RaiseWorksiteChanged(key);
+        return WorldCommandResult.Ok();
+    }
+
+    private static WorldCommandResult TryChiselBegin(WorldCommand command, IWorldAuthority authority)
+    {
+        if (!authority.TryBeginChiselBlock(command.BlockPosition))
         {
             return WorldCommandResult.Fail("Cannot chisel this block.");
         }
@@ -223,19 +247,14 @@ public static class WorldCommandExecutor
         return WorldCommandResult.Ok();
     }
 
-    private static WorldCommandResult TryChiselRemove(WorldCommand command, BlockWorldServer server)
+    private static WorldCommandResult TryChiselRemove(WorldCommand command, IWorldAuthority authority)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
-        if (!server.HasChiseledBlockAt(command.BlockPosition))
+        if (!authority.HasChiseledBlockAt(command.BlockPosition))
         {
             return WorldCommandResult.Fail("No chiseled block here.");
         }
 
-        if (!server.TryChiselRemoveVoxel(command.BlockPosition, command.ChiselLocalPoint))
+        if (!authority.TryChiselRemoveVoxel(command.BlockPosition, command.ChiselLocalPoint))
         {
             return WorldCommandResult.Fail("Cannot remove voxel.");
         }
@@ -243,19 +262,14 @@ public static class WorldCommandExecutor
         return WorldCommandResult.Ok();
     }
 
-    private static WorldCommandResult TryChiselAdd(WorldCommand command, BlockWorldServer server)
+    private static WorldCommandResult TryChiselAdd(WorldCommand command, IWorldAuthority authority)
     {
-        if (server == null)
-        {
-            return WorldCommandResult.Fail("World server is not ready.");
-        }
-
-        if (!server.HasChiseledBlockAt(command.BlockPosition))
+        if (!authority.HasChiseledBlockAt(command.BlockPosition))
         {
             return WorldCommandResult.Fail("No chiseled block here.");
         }
 
-        if (!server.TryChiselAddVoxel(command.BlockPosition, command.ChiselLocalPoint))
+        if (!authority.TryChiselAddVoxel(command.BlockPosition, command.ChiselLocalPoint))
         {
             return WorldCommandResult.Fail("Cannot add voxel.");
         }

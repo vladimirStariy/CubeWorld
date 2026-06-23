@@ -5,7 +5,7 @@ public sealed class GameCommandConsole : MonoBehaviour
 {
     [SerializeField] private FirstPersonCharacterController playerController;
     [SerializeField] private CreativeInventory inventory;
-    [SerializeField] private BlockWorldServer worldServer;
+    [SerializeField] private IGameServerConnection worldConnection;
     [SerializeField] private CreativeInventoryUI creativeInventoryUi;
 
     private readonly GameCommandConsoleView view = new();
@@ -21,7 +21,7 @@ public sealed class GameCommandConsole : MonoBehaviour
         Canvas hudCanvas,
         FirstPersonCharacterController player,
         CreativeInventory inventoryRef,
-        BlockWorldServer server,
+        IGameServerConnection connection,
         CreativeInventoryUI inventoryUi)
     {
         if (configured)
@@ -31,7 +31,7 @@ public sealed class GameCommandConsole : MonoBehaviour
 
         playerController = player;
         inventory = inventoryRef;
-        worldServer = server;
+        worldConnection = connection;
         creativeInventoryUi = inventoryUi;
 
         consoleInput.Build(OnSubmitPerformed);
@@ -39,7 +39,10 @@ public sealed class GameCommandConsole : MonoBehaviour
         SetOpen(false);
         consoleInput.Enable();
         configured = true;
+        GameConsoleLog.Bind(this);
     }
+
+    public void Log(string line) => view.AppendLog(line);
 
     private void OnEnable()
     {
@@ -189,7 +192,7 @@ public sealed class GameCommandConsole : MonoBehaviour
         {
             Player = playerController,
             Inventory = inventory,
-            World = worldServer,
+            World = worldConnection?.Authority,
             ClearLog = view.ClearLog
         };
 

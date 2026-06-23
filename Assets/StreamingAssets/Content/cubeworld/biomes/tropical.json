@@ -1,0 +1,10 @@
+{
+  "id": "cubeworld:tropical",
+  "displayName": "Tropical",
+  "minTemperature": 22,
+  "maxTemperature": 42,
+  "surfaceBlock": "cubeworld:grass_block",
+  "subsurfaceBlock": "cubeworld:dirt",
+  "fillerBlock": "cubeworld:dirt",
+  "priority": 0
+}

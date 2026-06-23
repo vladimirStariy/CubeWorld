@@ -1,5 +1,6 @@
 {
   "id": "cubeworld:dirt_slab",
+  "shape": "base:bottom_slab",
   "displayName": "Dirt Slab",
   "runtimeKind": "Block",
   "blockType": "DirtSlab",

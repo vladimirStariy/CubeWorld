@@ -1,0 +1,26 @@
+{
+  "id": "cubeworld:item/stick",
+  "elements": [
+    {
+      "name": "stick_a",
+      "from": [-0.045, -0.045, -0.28],
+      "to": [0.045, 0.045, 0.28],
+      "rotationY": 0,
+      "rotationX": 8
+    },
+    {
+      "name": "stick_b",
+      "from": [-0.045, -0.045, -0.28],
+      "to": [0.045, 0.045, 0.28],
+      "rotationY": 62,
+      "rotationX": -12
+    },
+    {
+      "name": "stick_c",
+      "from": [-0.045, -0.045, -0.28],
+      "to": [0.045, 0.045, 0.28],
+      "rotationY": -58,
+      "rotationX": 6
+    }
+  ]
+}

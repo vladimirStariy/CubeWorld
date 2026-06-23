@@ -63,4 +63,38 @@ public static class VoxelConstants
             _ => new Vector3Int(u, v, plane)
         };
     }
+
+    public static Vector3Int WorldPositionToBlockIndex(Vector3 worldPosition)
+    {
+        return new Vector3Int(
+            WorldAxisToBlockIndex(worldPosition.x),
+            WorldAxisToBlockIndex(worldPosition.y),
+            WorldAxisToBlockIndex(worldPosition.z));
+    }
+
+    public static int WorldAxisToBlockIndex(float axis)
+    {
+        return Mathf.FloorToInt(axis + 0.5f);
+    }
+
+    public static void GetBlockBounds(Vector3Int blockIndex, out Vector3 min, out Vector3 max)
+    {
+        min = new Vector3(blockIndex.x - 0.5f, blockIndex.y - 0.5f, blockIndex.z - 0.5f);
+        max = new Vector3(blockIndex.x + 0.5f, blockIndex.y + 0.5f, blockIndex.z + 0.5f);
+    }
+
+    public static float NextCenteredBlockBoundary(float originAxis, int blockIndex, int stepAxis, float directionAxis)
+    {
+        if (stepAxis > 0)
+        {
+            return (blockIndex + 0.5f - originAxis) / directionAxis;
+        }
+
+        if (stepAxis < 0)
+        {
+            return (originAxis - (blockIndex - 0.5f)) / -directionAxis;
+        }
+
+        return float.PositiveInfinity;
+    }
 }

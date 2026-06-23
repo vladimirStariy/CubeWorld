@@ -14,7 +14,7 @@ public static class ContentTextureLoader
         try
         {
             var bytes = File.ReadAllBytes(filePath);
-            texture = new Texture2D(2, 2, TextureFormat.RGBA32, true, false)
+            texture = new Texture2D(2, 2, TextureFormat.RGBA32, false, false)
             {
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp,

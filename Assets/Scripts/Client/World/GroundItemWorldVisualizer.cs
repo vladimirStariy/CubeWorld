@@ -3,23 +3,21 @@ using UnityEngine;
 
 public sealed class GroundItemWorldVisualizer : MonoBehaviour
 {
-    private const int MaxVisibleStickModels = StickStackLayout.MaxVisualModels;
-
     private readonly List<GroundItemSurfaceSnapshot> snapshotBuffer = new();
     private readonly Dictionary<GroundItemSurfaceKey, SurfaceVisual> visuals = new();
 
-    private BlockWorldServer server;
+    private IWorldAuthority authority;
     private Transform visualsRoot;
     private bool configured;
 
-    public void Configure(BlockWorldServer worldServer)
+    public void Configure(IWorldAuthority worldAuthority)
     {
         if (configured)
         {
             return;
         }
 
-        server = worldServer;
+        authority = worldAuthority;
         visualsRoot = new GameObject("GroundItemVisuals").transform;
         visualsRoot.SetParent(transform, false);
         configured = true;
@@ -28,12 +26,12 @@ public sealed class GroundItemWorldVisualizer : MonoBehaviour
 
     public void Sync()
     {
-        if (!configured || server == null)
+        if (!configured || authority == null)
         {
             return;
         }
 
-        server.CopyGroundItemSnapshots(snapshotBuffer);
+        authority.CopyGroundItemSnapshots(snapshotBuffer);
 
         var seen = new HashSet<GroundItemSurfaceKey>();
         for (int i = 0; i < snapshotBuffer.Count; i++)
@@ -110,8 +108,8 @@ public sealed class GroundItemWorldVisualizer : MonoBehaviour
 
         public void Apply(GroundItemSurfaceSnapshot snapshot)
         {
-            var stickCount = 0;
-            var hasStickStack = false;
+            GroundItemPlacementProfile? stackProfile = null;
+            var stackCount = 0;
 
             for (int i = 0; i < slots.Length; i++)
             {
@@ -136,28 +134,32 @@ public sealed class GroundItemWorldVisualizer : MonoBehaviour
                     snapshot.Layout,
                     i);
 
-                if (snapshot.Layout == GroundPlacementLayout.Stack && slot.Kind == ItemKind.Stick && i == 0)
+                if (snapshot.Layout == GroundPlacementLayout.Stack
+                    && GroundItemPlacementProfiles.TryGet(slot.Kind, out var profile)
+                    && profile.HasStackingShape
+                    && i == 0)
                 {
-                    hasStickStack = true;
-                    stickCount = slot.Count;
+                    stackProfile = profile;
+                    stackCount = slot.Count;
                 }
             }
 
-            UpdateCollider(hasStickStack, stickCount, snapshot.Layout);
+            UpdateCollider(stackProfile, stackCount, snapshot.Layout);
         }
 
-        private void UpdateCollider(bool hasStickStack, int stickCount, GroundPlacementLayout layout)
+        private void UpdateCollider(GroundItemPlacementProfile? stackProfile, int stackCount, GroundPlacementLayout layout)
         {
             var slotOrigin = GroundItemPlacementMath.GetSlotLocalPosition(key.FaceNormal, layout, 0);
 
-            if (!hasStickStack)
+            if (!stackProfile.HasValue || stackCount <= 0)
             {
                 collider.size = new Vector3(0.92f, 0.2f, 0.92f);
                 collider.center = slotOrigin;
                 return;
             }
 
-            var height = StickStackLayout.GetStackHeight(stickCount);
+            var profile = stackProfile.Value;
+            var height = GroundStackMath.GetStackHeight(stackCount, profile);
             collider.size = new Vector3(1f, Mathf.Max(height, 0.08f), 1f);
             collider.center = slotOrigin + (Vector3)key.FaceNormal * (height * 0.5f);
         }
@@ -176,24 +178,12 @@ public sealed class GroundItemWorldVisualizer : MonoBehaviour
         private readonly Transform root;
         private readonly MeshFilter meshFilter;
         private readonly MeshRenderer meshRenderer;
-        private readonly Transform[] stickParts;
-        private readonly MeshFilter[] stickMeshFilters;
-        private readonly MeshRenderer[] stickMeshRenderers;
 
-        private SlotVisual(
-            Transform root,
-            MeshFilter meshFilter,
-            MeshRenderer meshRenderer,
-            Transform[] stickParts,
-            MeshFilter[] stickMeshFilters,
-            MeshRenderer[] stickMeshRenderers)
+        private SlotVisual(Transform root, MeshFilter meshFilter, MeshRenderer meshRenderer)
         {
             this.root = root;
             this.meshFilter = meshFilter;
             this.meshRenderer = meshRenderer;
-            this.stickParts = stickParts;
-            this.stickMeshFilters = stickMeshFilters;
-            this.stickMeshRenderers = stickMeshRenderers;
         }
 
         public static SlotVisual Create(Transform parent, string name)
@@ -206,37 +196,7 @@ public sealed class GroundItemWorldVisualizer : MonoBehaviour
             meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             meshRenderer.receiveShadows = false;
 
-            var stickParts = new Transform[MaxVisibleStickModels];
-            var stickMeshFilters = new MeshFilter[MaxVisibleStickModels];
-            var stickMeshRenderers = new MeshRenderer[MaxVisibleStickModels];
-            var stickMaterial = ItemWorldPlaceholderMaterials.Get(ItemKind.Stick);
-
-            for (int i = 0; i < MaxVisibleStickModels; i++)
-            {
-                var stickObject = new GameObject($"Stick{i}");
-                stickObject.transform.SetParent(partObject.transform, false);
-
-                var stickMeshFilter = stickObject.AddComponent<MeshFilter>();
-                stickMeshFilter.sharedMesh = ItemPreviewMeshBuilder.GetGroundStickMesh();
-
-                var stickMeshRenderer = stickObject.AddComponent<MeshRenderer>();
-                stickMeshRenderer.sharedMaterial = stickMaterial;
-                stickMeshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                stickMeshRenderer.receiveShadows = false;
-                stickObject.SetActive(false);
-
-                stickParts[i] = stickObject.transform;
-                stickMeshFilters[i] = stickMeshFilter;
-                stickMeshRenderers[i] = stickMeshRenderer;
-            }
-
-            return new SlotVisual(
-                partObject.transform,
-                meshFilter,
-                meshRenderer,
-                stickParts,
-                stickMeshFilters,
-                stickMeshRenderers);
+            return new SlotVisual(partObject.transform, meshFilter, meshRenderer);
         }
 
         public void Apply(
@@ -248,63 +208,73 @@ public sealed class GroundItemWorldVisualizer : MonoBehaviour
         {
             root.localPosition = GroundItemPlacementMath.GetSlotLocalPosition(faceNormal, layout, slotIndex);
             root.localRotation = GetFaceRotation(faceNormal);
+            root.localScale = Vector3.one;
+            meshRenderer.enabled = true;
 
-            if (layout == GroundPlacementLayout.Stack && kind == ItemKind.Stick)
+            if (layout == GroundPlacementLayout.Stack
+                && GroundItemPlacementProfiles.TryGet(kind, out var profile)
+                && profile.HasStackingShape)
             {
-                ApplyStickStack(count);
+                ApplyShapeStack(kind, count, profile);
                 return;
             }
 
-            SetStickStackActive(false);
-            meshRenderer.enabled = true;
+            if (!TryResolveItemRenderData(kind, out var mesh, out var material))
+            {
+                meshRenderer.enabled = false;
+                return;
+            }
 
-            var mesh = ItemPreviewMeshBuilder.GetMesh(kind);
             meshFilter.sharedMesh = mesh;
-            meshRenderer.sharedMaterial = ItemWorldPlaceholderMaterials.Get(kind);
+            meshRenderer.sharedMaterial = material;
 
             var groundOffset = ItemPreviewMeshBuilder.GetMeshGroundOffset(mesh);
             root.localPosition += root.up * groundOffset;
 
-            root.localScale = layout == GroundPlacementLayout.Pile
-                ? Vector3.one * (0.7f + Mathf.Min(count, 64) * 0.006f)
-                : layout == GroundPlacementLayout.Dual
-                    ? Vector3.one * 0.85f
-                    : Vector3.one;
-        }
-
-        private void ApplyStickStack(int count)
-        {
-            meshRenderer.enabled = false;
-            var visibleCount = StickStackLayout.GetVisibleModelCount(count);
-            var stickMaterial = ItemWorldPlaceholderMaterials.Get(ItemKind.Stick);
-            var stickMesh = ItemPreviewMeshBuilder.GetGroundStickMesh();
-            var groundOffset = ItemPreviewMeshBuilder.GetMeshGroundOffset(stickMesh);
-
-            for (int i = 0; i < MaxVisibleStickModels; i++)
+            if (layout == GroundPlacementLayout.Pile)
             {
-                var active = i < visibleCount;
-                stickParts[i].gameObject.SetActive(active);
-                if (!active)
-                {
-                    continue;
-                }
-
-                stickMeshFilters[i].sharedMesh = stickMesh;
-                stickMeshRenderers[i].sharedMaterial = stickMaterial;
-
-                StickStackLayout.GetPose(i, out var localOffset, out var localRotation);
-                stickParts[i].localPosition = localOffset + Vector3.up * groundOffset;
-                stickParts[i].localRotation = localRotation;
-                stickParts[i].localScale = Vector3.one;
+                root.localScale = Vector3.one * (0.7f + Mathf.Min(count, 64) * 0.006f);
+            }
+            else if (layout == GroundPlacementLayout.Dual)
+            {
+                root.localScale = Vector3.one * 0.85f;
             }
         }
 
-        private void SetStickStackActive(bool active)
+        private void ApplyShapeStack(ItemKind kind, int count, GroundItemPlacementProfile profile)
         {
-            for (int i = 0; i < MaxVisibleStickModels; i++)
+            var quantity = GroundStackMath.GetQuantityElements(count, profile);
+            if (!ItemShapeRegistry.Active.TryGet(profile.StackingShapeId, out var shapeDefinition)
+                || !ItemShapeMeshBuilder.TryGetRenderData(profile.StackingShapeId, quantity, kind, out var mesh, out var material)
+                || mesh == null
+                || material == null)
             {
-                stickParts[i].gameObject.SetActive(active);
+                meshRenderer.enabled = false;
+                return;
             }
+
+            meshFilter.sharedMesh = ItemShapeMeshBuilder.GetGroundStackMesh(mesh, shapeDefinition);
+            meshRenderer.sharedMaterial = material;
+        }
+
+        private static bool TryResolveItemRenderData(ItemKind kind, out Mesh mesh, out Material material)
+        {
+            mesh = null;
+            material = null;
+
+            if (ItemRegistry.Active != null
+                && ItemRegistry.Active.TryGet(kind, VoxelBlockType.Air, out var definition)
+                && !string.IsNullOrEmpty(definition.ShapeId.Name)
+                && ItemShapeMeshBuilder.TryGetRenderData(definition.ShapeId, int.MaxValue, kind, out mesh, out material)
+                && mesh != null
+                && material != null)
+            {
+                return true;
+            }
+
+            mesh = ItemPreviewMeshBuilder.GetMesh(kind);
+            material = ItemWorldPlaceholderMaterials.Get(kind);
+            return mesh != null && material != null;
         }
 
         public void SetActive(bool active)

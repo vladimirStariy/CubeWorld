@@ -65,6 +65,14 @@ public sealed class PlayerDebugOverlay : MonoBehaviour
         var pos = Vector3Int.FloorToInt(playerController.transform.position);
         textBuilder.Clear();
         textBuilder.Append("XYZ: ").Append(pos.x).Append(' ').Append(pos.y).Append(' ').Append(pos.z);
+        textBuilder.Append("\nFlight: ").Append(playerController.IsFlying ? "ON" : "off");
+
+        if (worldClient != null && worldClient.TryGetBiomeAt(pos, out var biome, out var climate))
+        {
+            textBuilder.Append("\nBiome: ").Append(biome.DisplayName);
+            textBuilder.Append(" (").Append(biome.Id).Append(')');
+            textBuilder.Append("\nTemp: ").Append(climate.Temperature.ToString("0.0"));
+        }
 
         if (worldClient != null && worldClient.TryGetLookTargetInfo(out var blockPos, out var faceNormal, out var blockInfo))
         {
@@ -84,6 +92,14 @@ public sealed class PlayerDebugOverlay : MonoBehaviour
         else
         {
             textBuilder.Append("\nBlock: (none)");
+        }
+
+        RuntimeFrameProfiler.AppendReport(textBuilder);
+
+        if (worldClient != null && worldClient.TryGetStreamingDiagnostics(out var baseMs, out var streamBudget))
+        {
+            textBuilder.Append("\nPacing base: ").Append(baseMs.ToString("0.0"));
+            textBuilder.Append(" ms  stream budget: ").Append(streamBudget.ToString("0.0")).Append(" ms");
         }
 
         debugText.text = textBuilder.ToString();
@@ -130,7 +146,7 @@ public sealed class PlayerDebugOverlay : MonoBehaviour
         rect.anchorMax = new Vector2(0f, 1f);
         rect.pivot = new Vector2(0f, 1f);
         rect.anchoredPosition = new Vector2(12f, -12f);
-        rect.sizeDelta = new Vector2(400f, 140f);
+        rect.sizeDelta = new Vector2(420f, 360f);
     }
 
     private void SetVisible(bool visible)

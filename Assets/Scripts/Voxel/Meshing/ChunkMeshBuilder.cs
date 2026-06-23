@@ -1,25 +1,45 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 public static class ChunkMeshBuilder
 {
-    public static void BuildChunkMesh(IVoxelBlockView world, ChunkData chunk)
+    public static void ClearChunkMesh(ChunkRenderEntry entry)
     {
-        var vertices = new List<Vector3>(1024);
-        var triangles = new List<int>(2048);
-        var normals = new List<Vector3>(1024);
-        var uvs = new List<Vector2>(1024);
+        entry?.Clear();
+    }
+
+    public static void BuildChunkMesh(IVoxelBlockView world, ChunkBlockData blocks, ChunkRenderEntry entry)
+    {
+        var scratch = new ChunkMeshScratch();
+        BuildChunkMesh(world, blocks, entry, scratch);
+    }
+
+    public static void BuildChunkMesh(IVoxelBlockView world, ChunkBlockData blocks, ChunkRenderEntry entry, ChunkMeshScratch scratch)
+    {
+        BuildChunkMesh(world, blocks, scratch);
+        entry.ApplyMesh(scratch.Vertices, scratch.Triangles, scratch.Normals, scratch.Uvs, scratch.TileRects, scratch.TileCounts);
+    }
+
+    public static void BuildChunkMesh(IVoxelBlockView world, ChunkBlockData blocks, ChunkMeshScratch scratch)
+    {
+        scratch.Clear();
+
+        var vertices = scratch.Vertices;
+        var triangles = scratch.Triangles;
+        var normals = scratch.Normals;
+        var uvs = scratch.Uvs;
+        var tileRects = scratch.TileRects;
+        var tileCounts = scratch.TileCounts;
 
         var chunkSize = world.ChunkSize;
         var chunkWorldOrigin = new Vector3Int(
-            chunk.Coord.x * chunkSize,
-            chunk.Coord.y * chunkSize,
-            chunk.Coord.z * chunkSize);
+            blocks.Coord.x * chunkSize,
+            blocks.Coord.y * chunkSize,
+            blocks.Coord.z * chunkSize);
 
         for (int face = 0; face < VoxelConstants.NeighborDirs.Length; face++)
         {
-            AddFullBlockFaces(world, chunk, face, vertices, triangles, normals, uvs);
+            AddGreedyFullCubeFaces(world, blocks, face, vertices, triangles, normals, uvs, tileRects, tileCounts, scratch);
         }
 
         for (int x = 0; x < chunkSize; x++)
@@ -29,15 +49,15 @@ public static class ChunkMeshBuilder
                 for (int z = 0; z < chunkSize; z++)
                 {
                     var local = new Vector3Int(x, y, z);
-                    var blockWorld = world.LocalToWorld(chunk.Coord, local);
-                    var blockType = world.GetBlock(blockWorld);
+                    var blockWorld = world.LocalToWorld(blocks.Coord, local);
+                    var blockType = blocks.GetBlock(local);
                     if (VoxelBlockShapes.IsBottomSlab(blockType))
                     {
-                        AddBottomSlabToMesh(world, blockWorld, chunkWorldOrigin, blockType, vertices, triangles, normals, uvs);
+                        AddBottomSlabToMesh(world, blockWorld, chunkWorldOrigin, blockType, vertices, triangles, normals, uvs, tileRects, tileCounts);
                     }
                     else if (VoxelBlockShapes.IsCustomMeshBlock(blockType))
                     {
-                        AddCustomMeshBlockToMesh(world, blockWorld, chunkWorldOrigin, blockType, vertices, triangles, normals, uvs);
+                        AddCustomMeshBlockToMesh(world, blockWorld, chunkWorldOrigin, blockType, vertices, triangles, normals, uvs, tileRects, tileCounts);
                     }
                 }
             }
@@ -50,160 +70,230 @@ public static class ChunkMeshBuilder
                 for (int z = 0; z < chunkSize; z++)
                 {
                     var local = new Vector3Int(x, y, z);
-                    var blockWorld = world.LocalToWorld(chunk.Coord, local);
+                    var blockWorld = world.LocalToWorld(blocks.Coord, local);
 
                     if (world.TryGetChiseledBlock(blockWorld, out var chiseled))
                     {
-                        AddChiseledBlockToMesh(world, chiseled, local, chunkWorldOrigin, vertices, triangles, normals, uvs);
+                        AddChiseledBlockToMesh(world, chiseled, local, chunkWorldOrigin, vertices, triangles, normals, uvs, tileRects, tileCounts);
                     }
                 }
             }
         }
 
-        var mesh = new Mesh { indexFormat = IndexFormat.UInt32 };
-        mesh.SetVertices(vertices);
-        mesh.SetTriangles(triangles, 0);
-        mesh.SetNormals(normals);
-        mesh.SetUVs(0, uvs);
-        mesh.RecalculateBounds();
-
-        chunk.Filter.sharedMesh = mesh;
-        chunk.Collider.sharedMesh = null;
-        chunk.Collider.sharedMesh = mesh;
     }
 
-    private static void AddFullBlockFaces(
+    private static void AddGreedyFullCubeFaces(
         IVoxelBlockView world,
-        ChunkData chunk,
+        ChunkBlockData blocks,
         int faceIndex,
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
-        List<Vector2> uvs)
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts,
+        ChunkMeshScratch scratch)
     {
         var chunkSize = world.ChunkSize;
+        var mask = scratch.GetGreedyMask(chunkSize);
 
-        for (int x = 0; x < chunkSize; x++)
+        for (int d = 0; d < chunkSize; d++)
         {
-            for (int y = 0; y < chunkSize; y++)
+            for (int u = 0; u < chunkSize; u++)
             {
-                for (int z = 0; z < chunkSize; z++)
+                for (int v = 0; v < chunkSize; v++)
                 {
-                    var local = new Vector3Int(x, y, z);
-                    var blockWorld = world.LocalToWorld(chunk.Coord, local);
+                    var local = FaceSliceToLocal(faceIndex, d, u, v);
+                    if (!ChunkMeshOcclusion.TryGetGreedyFaceSlot(world, blocks, chunkSize, local, faceIndex, out var textureSlot))
+                    {
+                        mask[u, v] = -1;
+                        continue;
+                    }
 
-                    if (!world.IsFullCubeBlock(blockWorld) || world.HasChiseledBlock(blockWorld))
+                    mask[u, v] = textureSlot;
+                }
+            }
+
+            for (int u = 0; u < chunkSize; u++)
+            {
+                for (int v = 0; v < chunkSize; v++)
+                {
+                    var textureSlot = mask[u, v];
+                    if (textureSlot < 0)
                     {
                         continue;
                     }
 
-                    var neighbor = blockWorld + VoxelConstants.NeighborDirs[faceIndex];
-                    if (world.IsFaceOccludedByNeighbor(neighbor, faceIndex))
+                    var width = 1;
+                    while (v + width < chunkSize && mask[u, v + width] == textureSlot)
                     {
-                        continue;
+                        width++;
                     }
 
-                    var blockType = world.GetBlock(blockWorld);
-                    var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(blockType, faceIndex);
-                    AddSingleBlockFace(faceIndex, local, textureSlot, vertices, triangles, normals, uvs);
+                    var height = 1;
+                    var canGrow = true;
+                    while (u + height < chunkSize && canGrow)
+                    {
+                        for (int k = 0; k < width; k++)
+                        {
+                            if (mask[u + height, v + k] != textureSlot)
+                            {
+                                canGrow = false;
+                                break;
+                            }
+                        }
+
+                        if (canGrow)
+                        {
+                            height++;
+                        }
+                    }
+
+                    AddGreedyFullCubeFace(faceIndex, d, u, v, height, width, textureSlot, vertices, triangles, normals, uvs, tileRects, tileCounts);
+
+                    for (int du = 0; du < height; du++)
+                    {
+                        for (int dv = 0; dv < width; dv++)
+                        {
+                            mask[u + du, v + dv] = -1;
+                        }
+                    }
                 }
             }
         }
     }
 
-    private static void AddSingleBlockFace(
+    private static Vector3Int FaceSliceToLocal(int faceIndex, int d, int u, int v)
+    {
+        return faceIndex switch
+        {
+            0 or 1 => new Vector3Int(d, u, v),
+            2 or 3 => new Vector3Int(u, d, v),
+            _ => new Vector3Int(u, v, d)
+        };
+    }
+
+    /// <summary>
+    /// Normalized 0..1 quad UVs per face (matches BlockPreviewMeshBuilder winding).
+    /// Shader tiles with frac(quadUV * tileCount).
+    /// </summary>
+    private static void GetFaceQuadNormUv(
         int faceIndex,
-        Vector3Int local,
+        out Vector2 uv0,
+        out Vector2 uv1,
+        out Vector2 uv2,
+        out Vector2 uv3)
+    {
+        switch (faceIndex)
+        {
+            case 0:
+            case 1:
+            case 5:
+                uv0 = new Vector2(0f, 0f);
+                uv1 = new Vector2(0f, 1f);
+                uv2 = new Vector2(1f, 1f);
+                uv3 = new Vector2(1f, 0f);
+                break;
+            case 2:
+            case 3:
+                uv0 = new Vector2(0f, 0f);
+                uv1 = new Vector2(1f, 0f);
+                uv2 = new Vector2(1f, 1f);
+                uv3 = new Vector2(0f, 1f);
+                break;
+            default: // +Z
+                uv0 = new Vector2(1f, 0f);
+                uv1 = new Vector2(1f, 1f);
+                uv2 = new Vector2(0f, 1f);
+                uv3 = new Vector2(0f, 0f);
+                break;
+        }
+    }
+
+    private static Vector2 FaceTileCount(int faceIndex, int height, int width)
+    {
+        return faceIndex switch
+        {
+            0 or 1 => new Vector2(width, height),
+            _ => new Vector2(height, width)
+        };
+    }
+
+    private static void AddGreedyFullCubeFace(
+        int faceIndex,
+        int d,
+        int uStart,
+        int vStart,
+        int height,
+        int width,
         int textureSlot,
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
-        List<Vector2> uvs)
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts)
     {
-        var x = local.x;
-        var y = local.y;
-        var z = local.z;
-        var xmin = x - 0.5f;
-        var xmax = x + 0.5f;
-        var ymin = y - 0.5f;
-        var ymax = y + 0.5f;
-        var zmin = z - 0.5f;
-        var zmax = z + 0.5f;
+        var uMin = uStart - 0.5f;
+        var uMax = uStart + height - 0.5f;
+        var vMin = vStart - 0.5f;
+        var vMax = vStart + width - 0.5f;
+        GetFaceQuadNormUv(faceIndex, out var uv0, out var uv1, out var uv2, out var uv3);
+        var tileCount = FaceTileCount(faceIndex, height, width);
 
         switch (faceIndex)
         {
             case 0:
-                AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
-                    new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymin, zmax),
-                    AtlasTileUv(textureSlot, 0f, 0f), AtlasTileUv(textureSlot, 0f, 1f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 1f, 0f));
+                AddQuad(vertices, triangles, normals, uvs, tileRects, tileCounts, VoxelConstants.NeighborDirs[faceIndex],
+                    new Vector3(d + 0.5f, uMin, vMin), new Vector3(d + 0.5f, uMax, vMin), new Vector3(d + 0.5f, uMax, vMax), new Vector3(d + 0.5f, uMin, vMax),
+                    uv0, uv1, uv2, uv3, textureSlot, tileCount);
                 break;
             case 1:
-                AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
-                    new Vector3(xmin, ymin, zmax), new Vector3(xmin, ymax, zmax), new Vector3(xmin, ymax, zmin), new Vector3(xmin, ymin, zmin),
-                    AtlasTileUv(textureSlot, 0f, 0f), AtlasTileUv(textureSlot, 0f, 1f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 1f, 0f));
+                AddQuad(vertices, triangles, normals, uvs, tileRects, tileCounts, VoxelConstants.NeighborDirs[faceIndex],
+                    new Vector3(d - 0.5f, uMin, vMax), new Vector3(d - 0.5f, uMax, vMax), new Vector3(d - 0.5f, uMax, vMin), new Vector3(d - 0.5f, uMin, vMin),
+                    uv0, uv1, uv2, uv3, textureSlot, tileCount);
                 break;
             case 2:
-                AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
-                    new Vector3(xmin, ymax, zmax), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymax, zmin), new Vector3(xmin, ymax, zmin),
-                    AtlasTileUv(textureSlot, 0f, 0f), AtlasTileUv(textureSlot, 1f, 0f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 0f, 1f));
+                AddQuad(vertices, triangles, normals, uvs, tileRects, tileCounts, VoxelConstants.NeighborDirs[faceIndex],
+                    new Vector3(uMin, d + 0.5f, vMax), new Vector3(uMax, d + 0.5f, vMax), new Vector3(uMax, d + 0.5f, vMin), new Vector3(uMin, d + 0.5f, vMin),
+                    uv0, uv1, uv2, uv3, textureSlot, tileCount);
                 break;
             case 3:
-                AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
-                    new Vector3(xmin, ymin, zmin), new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymin, zmax), new Vector3(xmin, ymin, zmax),
-                    AtlasTileUv(textureSlot, 0f, 0f), AtlasTileUv(textureSlot, 1f, 0f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 0f, 1f));
+                AddQuad(vertices, triangles, normals, uvs, tileRects, tileCounts, VoxelConstants.NeighborDirs[faceIndex],
+                    new Vector3(uMin, d - 0.5f, vMin), new Vector3(uMax, d - 0.5f, vMin), new Vector3(uMax, d - 0.5f, vMax), new Vector3(uMin, d - 0.5f, vMax),
+                    uv0, uv1, uv2, uv3, textureSlot, tileCount);
                 break;
             case 4:
-                AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
-                    new Vector3(xmax, ymin, zmax), new Vector3(xmax, ymax, zmax), new Vector3(xmin, ymax, zmax), new Vector3(xmin, ymin, zmax),
-                    AtlasTileUv(textureSlot, 1f, 0f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 0f, 1f), AtlasTileUv(textureSlot, 0f, 0f));
+                AddQuad(vertices, triangles, normals, uvs, tileRects, tileCounts, VoxelConstants.NeighborDirs[faceIndex],
+                    new Vector3(uMax, vMin, d + 0.5f), new Vector3(uMax, vMax, d + 0.5f), new Vector3(uMin, vMax, d + 0.5f), new Vector3(uMin, vMin, d + 0.5f),
+                    uv0, uv1, uv2, uv3, textureSlot, tileCount);
                 break;
             default:
-                AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
-                    new Vector3(xmin, ymin, zmin), new Vector3(xmin, ymax, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymin, zmin),
-                    AtlasTileUv(textureSlot, 0f, 0f), AtlasTileUv(textureSlot, 0f, 1f), AtlasTileUv(textureSlot, 1f, 1f), AtlasTileUv(textureSlot, 1f, 0f));
+                AddQuad(vertices, triangles, normals, uvs, tileRects, tileCounts, VoxelConstants.NeighborDirs[faceIndex],
+                    new Vector3(uMin, vMin, d - 0.5f), new Vector3(uMin, vMax, d - 0.5f), new Vector3(uMax, vMax, d - 0.5f), new Vector3(uMax, vMin, d - 0.5f),
+                    uv0, uv1, uv2, uv3, textureSlot, tileCount);
                 break;
         }
     }
 
-    private static Vector2 AtlasTileUv(int slot, float tileU, float tileV)
+    private static void AddBlockFaceQuad(
+        int faceIndex,
+        List<Vector3> vertices,
+        List<int> triangles,
+        List<Vector3> normals,
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts,
+        Vector3 v0,
+        Vector3 v1,
+        Vector3 v2,
+        Vector3 v3,
+        int textureSlot,
+        Vector2 tileCount)
     {
-        return BlockTextureLibrary.GetAtlasUv(slot, tileU, tileV);
-    }
-
-    private static Vector2 AtlasUvBlockLocal(int faceIndex, Vector3 blockLocal, int slot)
-    {
-        float tileU;
-        float tileV;
-
-        switch (faceIndex)
-        {
-            case 0:
-                tileU = blockLocal.z + 0.5f;
-                tileV = blockLocal.y + 0.5f;
-                break;
-            case 1:
-                tileU = 0.5f - blockLocal.z;
-                tileV = blockLocal.y + 0.5f;
-                break;
-            case 2:
-                tileU = blockLocal.x + 0.5f;
-                tileV = 0.5f - blockLocal.z;
-                break;
-            case 3:
-                tileU = blockLocal.x + 0.5f;
-                tileV = blockLocal.z + 0.5f;
-                break;
-            case 4:
-                tileU = blockLocal.x + 0.5f;
-                tileV = blockLocal.y + 0.5f;
-                break;
-            default:
-                tileU = blockLocal.x + 0.5f;
-                tileV = blockLocal.y + 0.5f;
-                break;
-        }
-
-        return BlockTextureLibrary.GetAtlasUv(slot, tileU, tileV);
+        GetFaceQuadNormUv(faceIndex, out var uv0, out var uv1, out var uv2, out var uv3);
+        AddQuad(vertices, triangles, normals, uvs, tileRects, tileCounts, VoxelConstants.NeighborDirs[faceIndex],
+            v0, v1, v2, v3, uv0, uv1, uv2, uv3, textureSlot, tileCount);
     }
 
     private static void AddBottomSlabToMesh(
@@ -214,7 +304,9 @@ public static class ChunkMeshBuilder
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
-        List<Vector2> uvs)
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts)
     {
         var blockOffset = (Vector3)blockWorld - (Vector3)chunkWorldOrigin;
         var ymin = blockOffset.y - 0.5f;
@@ -236,52 +328,34 @@ public static class ChunkMeshBuilder
             switch (face)
             {
                 case 0: // +X
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymin, zmax),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmax) - blockOffset, textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 case 1: // -X
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         new Vector3(xmin, ymin, zmax), new Vector3(xmin, ymax, zmax), new Vector3(xmin, ymax, zmin), new Vector3(xmin, ymin, zmin),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmin) - blockOffset, textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 case 2: // +Y
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         new Vector3(xmin, ymax, zmax), new Vector3(xmax, ymax, zmax), new Vector3(xmax, ymax, zmin), new Vector3(xmin, ymax, zmin),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmin) - blockOffset, textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 case 3: // -Y
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         new Vector3(xmin, ymin, zmin), new Vector3(xmax, ymin, zmin), new Vector3(xmax, ymin, zmax), new Vector3(xmin, ymin, zmax),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmax) - blockOffset, textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 case 4: // +Z
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         new Vector3(xmax, ymin, zmax), new Vector3(xmax, ymax, zmax), new Vector3(xmin, ymax, zmax), new Vector3(xmin, ymin, zmax),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmax) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmax) - blockOffset, textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 default: // -Z
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         new Vector3(xmin, ymin, zmin), new Vector3(xmin, ymax, zmin), new Vector3(xmax, ymax, zmin), new Vector3(xmax, ymin, zmin),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmin) - blockOffset, textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmin) - blockOffset, textureSlot));
+                        textureSlot, Vector2.one);
                     break;
             }
         }
@@ -293,6 +367,11 @@ public static class ChunkMeshBuilder
         if (!world.IsInWorld(neighbor))
         {
             return true;
+        }
+
+        if (world.IsFaceOccludedByNeighbor(neighbor, faceIndex))
+        {
+            return false;
         }
 
         var neighborType = world.GetBlock(neighbor);
@@ -328,12 +407,14 @@ public static class ChunkMeshBuilder
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
-        List<Vector2> uvs)
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts)
     {
         switch (blockType)
         {
             case VoxelBlockType.Campfire:
-                AddCampfireToMesh(world, blockWorld, chunkWorldOrigin, vertices, triangles, normals, uvs);
+                AddCampfireToMesh(world, blockWorld, chunkWorldOrigin, vertices, triangles, normals, uvs, tileRects, tileCounts);
                 break;
         }
     }
@@ -345,18 +426,20 @@ public static class ChunkMeshBuilder
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
-        List<Vector2> uvs)
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts)
     {
         var blockOffset = (Vector3)blockWorld - (Vector3)chunkWorldOrigin;
         var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(VoxelBlockType.Dirt, BlockFace.Top);
 
         // Ash bed.
-        AddTexturedBox(world, blockWorld, blockOffset, -0.30f, 0.30f, -0.50f, -0.38f, -0.30f, 0.30f, textureSlot, vertices, triangles, normals, uvs);
+        AddTexturedBox(world, blockWorld, blockOffset, -0.30f, 0.30f, -0.50f, -0.38f, -0.30f, 0.30f, textureSlot, vertices, triangles, normals, uvs, tileRects, tileCounts);
         // Crossed logs.
-        AddTexturedBox(world, blockWorld, blockOffset, -0.42f, 0.42f, -0.34f, -0.22f, -0.10f, 0.10f, textureSlot, vertices, triangles, normals, uvs);
-        AddTexturedBox(world, blockWorld, blockOffset, -0.10f, 0.10f, -0.22f, -0.10f, -0.42f, 0.42f, textureSlot, vertices, triangles, normals, uvs);
+        AddTexturedBox(world, blockWorld, blockOffset, -0.42f, 0.42f, -0.34f, -0.22f, -0.10f, 0.10f, textureSlot, vertices, triangles, normals, uvs, tileRects, tileCounts);
+        AddTexturedBox(world, blockWorld, blockOffset, -0.10f, 0.10f, -0.22f, -0.10f, -0.42f, 0.42f, textureSlot, vertices, triangles, normals, uvs, tileRects, tileCounts);
         // Small center pile.
-        AddTexturedBox(world, blockWorld, blockOffset, -0.14f, 0.14f, -0.10f, 0.06f, -0.14f, 0.14f, textureSlot, vertices, triangles, normals, uvs);
+        AddTexturedBox(world, blockWorld, blockOffset, -0.14f, 0.14f, -0.10f, 0.06f, -0.14f, 0.14f, textureSlot, vertices, triangles, normals, uvs, tileRects, tileCounts);
     }
 
     private static void AddTexturedBox(
@@ -373,7 +456,9 @@ public static class ChunkMeshBuilder
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
-        List<Vector2> uvs)
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts)
     {
         for (int face = 0; face < VoxelConstants.NeighborDirs.Length; face++)
         {
@@ -385,52 +470,34 @@ public static class ChunkMeshBuilder
             switch (face)
             {
                 case 0: // +X
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         blockOffset + new Vector3(xmax, ymin, zmin), blockOffset + new Vector3(xmax, ymax, zmin), blockOffset + new Vector3(xmax, ymax, zmax), blockOffset + new Vector3(xmax, ymin, zmax),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmax), textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 case 1: // -X
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         blockOffset + new Vector3(xmin, ymin, zmax), blockOffset + new Vector3(xmin, ymax, zmax), blockOffset + new Vector3(xmin, ymax, zmin), blockOffset + new Vector3(xmin, ymin, zmin),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmin), textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 case 2: // +Y
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         blockOffset + new Vector3(xmin, ymax, zmax), blockOffset + new Vector3(xmax, ymax, zmax), blockOffset + new Vector3(xmax, ymax, zmin), blockOffset + new Vector3(xmin, ymax, zmin),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmin), textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 case 3: // -Y
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         blockOffset + new Vector3(xmin, ymin, zmin), blockOffset + new Vector3(xmax, ymin, zmin), blockOffset + new Vector3(xmax, ymin, zmax), blockOffset + new Vector3(xmin, ymin, zmax),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmax), textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 case 4: // +Z
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         blockOffset + new Vector3(xmax, ymin, zmax), blockOffset + new Vector3(xmax, ymax, zmax), blockOffset + new Vector3(xmin, ymax, zmax), blockOffset + new Vector3(xmin, ymin, zmax),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmax), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmax), textureSlot));
+                        textureSlot, Vector2.one);
                     break;
                 default: // -Z
-                    AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[face],
+                    AddBlockFaceQuad(face, vertices, triangles, normals, uvs, tileRects, tileCounts,
                         blockOffset + new Vector3(xmin, ymin, zmin), blockOffset + new Vector3(xmin, ymax, zmin), blockOffset + new Vector3(xmax, ymax, zmin), blockOffset + new Vector3(xmax, ymin, zmin),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymin, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmin, ymax, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymax, zmin), textureSlot),
-                        AtlasUvBlockLocal(face, new Vector3(xmax, ymin, zmin), textureSlot));
+                        textureSlot, Vector2.one);
                     break;
             }
         }
@@ -442,6 +509,11 @@ public static class ChunkMeshBuilder
         if (!world.IsInWorld(neighbor))
         {
             return true;
+        }
+
+        if (world.IsFaceOccludedByNeighbor(neighbor, faceIndex))
+        {
+            return false;
         }
 
         var neighborType = world.GetBlock(neighbor);
@@ -467,7 +539,9 @@ public static class ChunkMeshBuilder
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
-        List<Vector2> uvs)
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts)
     {
         var resolution = block.Resolution;
         var mask = new bool[resolution, resolution];
@@ -539,7 +613,7 @@ public static class ChunkMeshBuilder
                             }
                         }
 
-                        AddMicroGreedyFace(face, p, u, v, height, width, resolution, chunkLocalBlockPos, chunkWorldOrigin, block.BlockType, vertices, triangles, normals, uvs);
+                        AddMicroGreedyFace(face, p, u, v, height, width, resolution, chunkLocalBlockPos, chunkWorldOrigin, block.BlockType, vertices, triangles, normals, uvs, tileRects, tileCounts);
 
                         for (int du = 0; du < height; du++)
                         {
@@ -568,7 +642,9 @@ public static class ChunkMeshBuilder
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals,
-        List<Vector2> uvs)
+        List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts)
     {
         var blockOffset = (Vector3)blockCenter;
         var step = 1f / resolution;
@@ -647,13 +723,11 @@ public static class ChunkMeshBuilder
         }
 
         var textureSlot = BlockTextureLibrary.GetFaceAtlasSlot(blockType, faceIndex);
+        var tileCount = FaceTileCount(faceIndex, uSize, vSize);
+        GetFaceQuadNormUv(faceIndex, out var uv0, out var uv1, out var uv2, out var uv3);
 
-        AddQuad(vertices, triangles, normals, uvs, VoxelConstants.NeighborDirs[faceIndex],
-            v0, v1, v2, v3,
-            AtlasUvBlockLocal(faceIndex, v0 - blockOffset, textureSlot),
-            AtlasUvBlockLocal(faceIndex, v1 - blockOffset, textureSlot),
-            AtlasUvBlockLocal(faceIndex, v2 - blockOffset, textureSlot),
-            AtlasUvBlockLocal(faceIndex, v3 - blockOffset, textureSlot));
+        AddQuad(vertices, triangles, normals, uvs, tileRects, tileCounts, VoxelConstants.NeighborDirs[faceIndex],
+            v0, v1, v2, v3, uv0, uv1, uv2, uv3, textureSlot, tileCount);
     }
 
     private static void AddQuad(
@@ -661,6 +735,8 @@ public static class ChunkMeshBuilder
         List<int> triangles,
         List<Vector3> normals,
         List<Vector2> uvs,
+        List<Vector4> tileRects,
+        List<Vector2> tileCounts,
         Vector3 normal,
         Vector3 v0,
         Vector3 v1,
@@ -669,8 +745,11 @@ public static class ChunkMeshBuilder
         Vector2 uv0,
         Vector2 uv1,
         Vector2 uv2,
-        Vector2 uv3)
+        Vector2 uv3,
+        int textureSlot,
+        Vector2 tileCount)
     {
+        var tileRect = BlockTextureLibrary.GetAtlasTileRect(textureSlot);
         var baseIndex = vertices.Count;
         vertices.Add(v0);
         vertices.Add(v1);
@@ -693,5 +772,13 @@ public static class ChunkMeshBuilder
         uvs.Add(uv1);
         uvs.Add(uv2);
         uvs.Add(uv3);
+        tileRects.Add(tileRect);
+        tileRects.Add(tileRect);
+        tileRects.Add(tileRect);
+        tileRects.Add(tileRect);
+        tileCounts.Add(tileCount);
+        tileCounts.Add(tileCount);
+        tileCounts.Add(tileCount);
+        tileCounts.Add(tileCount);
     }
 }

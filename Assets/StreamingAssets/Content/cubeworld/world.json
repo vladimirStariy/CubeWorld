@@ -1,0 +1,45 @@
+{
+
+  "generator": "cubeworld:planet",
+
+  "seed": 1337,
+
+  "size": {
+
+    "height": 64,
+
+    "baseY": 0,
+
+    "seaLevel": 4
+
+  },
+
+  "spawn": {
+
+    "x": 0,
+
+    "z": 0
+
+  },
+
+  "climate": {
+
+    "temperateTemperature": 14,
+
+    "poleTemperatureDrop": 26,
+
+    "latitudeScale": 10000
+
+  },
+
+  "terrain": {
+
+    "noiseScale": 0.02,
+
+    "heightVariation": 4
+
+  }
+
+}
+
+

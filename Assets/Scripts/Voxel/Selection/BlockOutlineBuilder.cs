@@ -3,6 +3,8 @@ using UnityEngine;
 
 public static class BlockOutlineBuilder
 {
+    private const float HitFaceOutlineOffset = 0.008f;
+
     public static bool TryGetOutlineSegments(IVoxelBlockView world, Vector3Int blockPosition, List<LineSegment> segments)
     {
         segments.Clear();
@@ -53,17 +55,19 @@ public static class BlockOutlineBuilder
         }
 
         var faceIndex = VoxelConstants.NormalToFaceIndex(faceNormal);
-        var offset = (Vector3)VoxelConstants.NeighborDirs[faceIndex] * 0.002f;
+        var offset = (Vector3)VoxelConstants.NeighborDirs[faceIndex] * HitFaceOutlineOffset;
 
         if (world.TryGetChiseledBlock(blockPosition, out var chiseled))
         {
             BuildChiseledFaceOutline(chiseled, faceIndex, offset, segments);
+            PromoteLocalSegmentsToWorld(blockPosition, segments);
             return segments.Count > 0;
         }
 
         if (VoxelBlockShapes.IsBottomSlab(world.GetBlock(blockPosition)))
         {
             BuildBottomSlabFaceOutline(faceIndex, offset, segments);
+            PromoteLocalSegmentsToWorld(blockPosition, segments);
             return segments.Count > 0;
         }
 
@@ -74,6 +78,7 @@ public static class BlockOutlineBuilder
         }
 
         BuildFullBlockFaceOutline(faceIndex, offset, segments);
+        PromoteLocalSegmentsToWorld(blockPosition, segments);
         return segments.Count > 0;
     }
 
@@ -210,6 +215,16 @@ public static class BlockOutlineBuilder
             4 => new Vector3(-half + u * step, -half + v * step, -half + (plane + 1) * step),
             _ => new Vector3(-half + u * step, -half + v * step, -half + plane * step),
         };
+    }
+
+    private static void PromoteLocalSegmentsToWorld(Vector3Int blockPosition, List<LineSegment> segments)
+    {
+        var origin = (Vector3)blockPosition;
+        for (int i = 0; i < segments.Count; i++)
+        {
+            var segment = segments[i];
+            segments[i] = new LineSegment(origin + segment.From, origin + segment.To);
+        }
     }
 
     private static void AddUniqueOutlineEdge(Vector3 a, Vector3 b, HashSet<string> edgeKeys, List<LineSegment> segments)

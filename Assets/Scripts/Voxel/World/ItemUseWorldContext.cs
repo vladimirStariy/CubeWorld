@@ -2,9 +2,9 @@ using UnityEngine;
 
 internal sealed class ItemUseWorldContext : IItemUseContext
 {
-    private readonly VoxelWorldStorage world;
+    private readonly WorldSimulation world;
 
-    public ItemUseWorldContext(VoxelWorldStorage world)
+    public ItemUseWorldContext(WorldSimulation world)
     {
         this.world = world;
     }

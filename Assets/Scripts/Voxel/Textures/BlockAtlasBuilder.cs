@@ -16,7 +16,7 @@ public static class BlockAtlasBuilder
 
         var tileWidth = dirt.width;
         var tileHeight = dirt.height;
-        var atlas = new Texture2D(tileWidth * 3, tileHeight, TextureFormat.RGBA32, true, false)
+        var atlas = new Texture2D(tileWidth * 3, tileHeight, TextureFormat.RGBA32, false, false)
         {
             filterMode = FilterMode.Point,
             wrapMode = TextureWrapMode.Clamp,
@@ -26,25 +26,28 @@ public static class BlockAtlasBuilder
         CopyTile(dirt, atlas, 0, 0, tileWidth, tileHeight);
         CopyTile(grassTop, atlas, tileWidth, 0, tileWidth, tileHeight);
         CopyTile(grassSide, atlas, tileWidth * 2, 0, tileWidth, tileHeight);
-        atlas.Apply(true, false);
+        atlas.Apply(false, false);
         return atlas;
     }
 
-    public static Texture2D BuildDynamic(Texture2D[] tiles, out int columns, out int rows)
+    public static Texture2D BuildDynamic(Texture2D[] tiles, out int columns, out int rows, out int tileWidth, out int tileHeight)
     {
         columns = 1;
         rows = 1;
+        tileWidth = 0;
+        tileHeight = 0;
         if (tiles == null || tiles.Length == 0 || tiles[0] == null)
         {
             return null;
         }
 
-        columns = Mathf.Max(1, Mathf.CeilToInt(Mathf.Sqrt(tiles.Length)));
-        rows = Mathf.Max(1, Mathf.CeilToInt(tiles.Length / (float)columns));
+        // Single-row layout avoids empty atlas cells that bleed into neighbors via mip filtering.
+        columns = tiles.Length;
+        rows = 1;
 
-        var tileWidth = tiles[0].width;
-        var tileHeight = tiles[0].height;
-        var atlas = new Texture2D(tileWidth * columns, tileHeight * rows, TextureFormat.RGBA32, true, false)
+        tileWidth = tiles[0].width;
+        tileHeight = tiles[0].height;
+        var atlas = new Texture2D(tileWidth * columns, tileHeight * rows, TextureFormat.RGBA32, false, false)
         {
             filterMode = FilterMode.Point,
             wrapMode = TextureWrapMode.Clamp,
@@ -63,7 +66,7 @@ public static class BlockAtlasBuilder
             CopyTile(tiles[i], atlas, column * tileWidth, row * tileHeight, tileWidth, tileHeight);
         }
 
-        atlas.Apply(true, false);
+        atlas.Apply(false, false);
         return atlas;
     }
 

@@ -14,7 +14,8 @@ public sealed class ClayFormingController : MonoBehaviour
         ClayFormingToolMode.Brush3
     };
 
-    private BlockWorldServer server;
+    private IWorldAuthority authority;
+    private IGameServerConnection connection;
     private Camera playerCamera;
     private CreativeInventory inventory;
     private CreativeInventoryUI creativeInventoryUi;
@@ -32,7 +33,7 @@ public sealed class ClayFormingController : MonoBehaviour
     public bool IsMenuBlockingInput => recipeMenu.IsOpen;
 
     public void Configure(
-        BlockWorldServer worldServer,
+        IGameServerConnection serverConnection,
         Camera camera,
         CreativeInventory inventoryState,
         CreativeInventoryUI inventoryUi,
@@ -44,7 +45,8 @@ public sealed class ClayFormingController : MonoBehaviour
             return;
         }
 
-        server = worldServer;
+        connection = serverConnection;
+        authority = serverConnection.Authority;
         playerCamera = camera;
         inventory = inventoryState;
         creativeInventoryUi = inventoryUi;
@@ -82,12 +84,12 @@ public sealed class ClayFormingController : MonoBehaviour
 
     public void UpdateContinuous()
     {
-        if (!configured || server == null)
+        if (!configured || connection == null || authority == null)
         {
             return;
         }
 
-        server.CopyClayWorksiteSnapshots(snapshotBuffer);
+        authority.CopyClayWorksiteSnapshots(snapshotBuffer);
         visualizer.SyncAll(snapshotBuffer);
 
         if (creativeInventoryUi != null && creativeInventoryUi.IsCreativePanelOpen)
@@ -123,7 +125,7 @@ public sealed class ClayFormingController : MonoBehaviour
         var anchor = BlockWorldTargeting.GetHitBlockPosition(hit);
         var faceNormal = Vector3Int.RoundToInt(hit.normal);
 
-        if (server.TryFindClayWorksite(anchor, faceNormal, out var existing))
+        if (authority.TryFindClayWorksite(anchor, faceNormal, out var existing))
         {
             if (existing.HasSession)
             {
@@ -136,7 +138,7 @@ public sealed class ClayFormingController : MonoBehaviour
             return true;
         }
 
-        var result = server.ExecuteCommand(WorldCommand.PlaceClayWorksite(anchor, faceNormal));
+        var result = connection.ExecuteCommand(WorldCommand.PlaceClayWorksite(anchor, faceNormal));
         if (!result.Success)
         {
             Debug.Log(result.Message);
@@ -201,22 +203,30 @@ public sealed class ClayFormingController : MonoBehaviour
 
         if (input.PlaceAction.IsPressed())
         {
-            var result = server.TryClayFormingAdd(key, u, v);
-            if (result.Changed)
+            if (TryClayEditCommand(WorldCommand.ClayFormingAdd(key, u, v)))
             {
                 nextEditTime = Time.time + EditCooldownSeconds;
-                HandleEditResult(result);
             }
         }
         else if (input.BreakAction.IsPressed())
         {
-            var result = server.TryClayFormingRemove(key, u, v);
-            if (result.Changed)
+            if (TryClayEditCommand(WorldCommand.ClayFormingRemove(key, u, v)))
             {
                 nextEditTime = Time.time + EditCooldownSeconds;
-                HandleEditResult(result);
             }
         }
+    }
+
+    private bool TryClayEditCommand(WorldCommand command)
+    {
+        var result = connection.ExecuteCommand(command);
+        if (!result.Success || !result.HasClayEditResult || !result.ClayEditResult.Changed)
+        {
+            return false;
+        }
+
+        HandleEditResult(result.ClayEditResult);
+        return true;
     }
 
     private void CycleToolMode(ClayWorksiteKey key, ClayFormingToolMode current)
@@ -232,7 +242,7 @@ public sealed class ClayFormingController : MonoBehaviour
         }
 
         var next = ToolCycle[index];
-        server.SetClayFormingToolMode(key, next);
+        connection.ExecuteCommand(WorldCommand.SetClayFormingToolMode(key, next));
         Debug.Log($"Clay tool: {next}");
     }
 
@@ -258,10 +268,11 @@ public sealed class ClayFormingController : MonoBehaviour
         hasPendingWorksite = false;
         CloseRecipeMenu();
 
-        if (!server.TryStartClayForming(key, recipeId, out var message))
+        var startResult = connection.ExecuteCommand(WorldCommand.StartClayForming(key, recipeId));
+        if (!startResult.Success)
         {
-            Debug.Log(message);
-            server.RemoveClayWorksite(key);
+            Debug.Log(startResult.Message);
+            connection.ExecuteCommand(WorldCommand.RemoveClayWorksite(key));
         }
         else
         {
@@ -278,7 +289,7 @@ public sealed class ClayFormingController : MonoBehaviour
             return;
         }
 
-        server.RemoveClayWorksite(pendingWorksiteKey);
+        connection.ExecuteCommand(WorldCommand.RemoveClayWorksite(pendingWorksiteKey));
         hasPendingWorksite = false;
     }
 
@@ -293,7 +304,7 @@ public sealed class ClayFormingController : MonoBehaviour
 
         var anchor = BlockWorldTargeting.GetHitBlockPosition(hit);
         var faceNormal = Vector3Int.RoundToInt(hit.normal);
-        if (!server.TryFindClayWorksite(anchor, faceNormal, out worksite))
+        if (!authority.TryFindClayWorksite(anchor, faceNormal, out worksite))
         {
             return false;
         }

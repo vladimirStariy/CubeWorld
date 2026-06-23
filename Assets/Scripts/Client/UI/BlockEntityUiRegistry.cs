@@ -13,12 +13,12 @@ public sealed class BlockEntityUiRegistry
         }
     }
 
-    public bool TryGetProvider(Vector3Int blockPosition, BlockWorldServer server, out IBlockEntityUiProvider provider)
+    public bool TryGetProvider(Vector3Int blockPosition, IWorldAuthority authority, out IBlockEntityUiProvider provider)
     {
         for (int i = 0; i < providers.Count; i++)
         {
             var candidate = providers[i];
-            if (candidate != null && candidate.CanOpen(blockPosition, server))
+            if (candidate != null && candidate.CanOpen(blockPosition, authority))
             {
                 provider = candidate;
                 return true;

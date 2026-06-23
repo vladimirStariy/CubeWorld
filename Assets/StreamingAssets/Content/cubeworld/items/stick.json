@@ -1,13 +1,31 @@
 {
   "id": "cubeworld:stick",
+  "shape": "cubeworld:item/stick",
   "displayName": "Stick",
   "runtimeKind": "Stick",
   "capabilities": ["GroundPlaceable", "CampfireAssemblyStick"],
   "commandAliases": ["stick", "sticks"],
   "showInCreative": true,
+  "guiTransform": {
+    "translation": { "x": 0, "y": 0.04, "z": 0 },
+    "rotation": { "x": -58, "y": 42, "z": -12 },
+    "origin": { "x": 0, "y": 0, "z": 0 },
+    "scale": 1.75
+  },
+  "fpHandTransform": {
+    "translation": { "x": 0.37, "y": -0.26, "z": 0.5 },
+    "rotation": { "x": -60, "y": -58, "z": 91 },
+    "origin": { "x": 0, "y": 0, "z": 0 },
+    "scale": 0.55
+  },
   "groundPlacement": {
     "layout": "Stack",
     "maxStackPerSlot": 42,
-    "shiftPickupAmount": 4
+    "shiftPickupAmount": 4,
+    "stackingShape": "cubeworld:ground/stick_pile",
+    "cuboidsPerModel": 1,
+    "itemsPerModel": 2,
+    "transferQuantity": 2,
+    "cbScaleYByLayer": 0.14
   }
 }

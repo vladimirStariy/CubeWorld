@@ -60,6 +60,10 @@ public static class ContentJsonParser
             groundProfile = profile;
         }
 
+        var shapeId = ResolveShapeId(json.shape, blockType);
+        var guiTransform = TryParseDisplayTransform(json.guiTransform);
+        var fpHandTransform = TryParseDisplayTransform(json.fpHandTransform);
+
         definition = new ItemDefinition(
             contentId,
             json.displayName,
@@ -68,9 +72,32 @@ public static class ContentJsonParser
             blockType,
             groundProfile,
             json.showInCreative,
-            json.commandAliases ?? Array.Empty<string>());
+            json.commandAliases ?? Array.Empty<string>(),
+            shapeId,
+            guiTransform,
+            fpHandTransform);
 
         return true;
+    }
+
+    public static ContentId ResolveShapeId(string shapeText, VoxelBlockType blockType)
+    {
+        if (!string.IsNullOrWhiteSpace(shapeText) && ContentId.TryParse(shapeText, out var parsedShapeId))
+        {
+            return parsedShapeId;
+        }
+
+        return InferDefaultShapeId(blockType);
+    }
+
+    private static ContentId InferDefaultShapeId(VoxelBlockType blockType)
+    {
+        return blockType switch
+        {
+            VoxelBlockType.DirtSlab => new ContentId("base", "bottom_slab"),
+            VoxelBlockType.Campfire => new ContentId("base", "custom_mesh"),
+            _ => new ContentId("base", "cube")
+        };
     }
 
     public static bool TryParseRecipe(RecipeJson json, ItemRegistry items, ContentCatalog catalog, out string error)
@@ -290,7 +317,50 @@ public static class ContentJsonParser
             return false;
         }
 
-        profile = new GroundItemPlacementProfile(layout, json.maxStackPerSlot, json.shiftPickupAmount);
+        ContentId stackingShapeId = default;
+        if (!string.IsNullOrWhiteSpace(json.stackingShape)
+            && !ContentId.TryParse(json.stackingShape, out stackingShapeId))
+        {
+            error = $"Invalid groundPlacement.stackingShape: {json.stackingShape}";
+            return false;
+        }
+
+        var transferQuantity = json.transferQuantity > 0 ? json.transferQuantity : 1;
+        profile = new GroundItemPlacementProfile(
+            layout,
+            json.maxStackPerSlot,
+            json.shiftPickupAmount,
+            stackingShapeId,
+            json.cuboidsPerModel,
+            json.itemsPerModel,
+            transferQuantity,
+            json.cbScaleYByLayer);
         return true;
     }
+
+    private static ItemDisplayTransform? TryParseDisplayTransform(ItemDisplayTransformJson json)
+    {
+        if (json == null)
+        {
+            return null;
+        }
+
+        var hasAny = json.translation != null
+                     || json.rotation != null
+                     || json.origin != null
+                     || json.scale > 0f;
+        if (!hasAny)
+        {
+            return null;
+        }
+
+        return new ItemDisplayTransform(
+            ReadVector3(json.translation),
+            ReadVector3(json.rotation),
+            ReadVector3(json.origin),
+            json.scale);
+    }
+
+    private static Vector3 ReadVector3(Vector3Json json) =>
+        json == null ? Vector3.zero : new Vector3(json.x, json.y, json.z);
 }

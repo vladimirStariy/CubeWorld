@@ -8,7 +8,7 @@ public static class GameCommandExecutor
     {
         public FirstPersonCharacterController Player;
         public CreativeInventory Inventory;
-        public BlockWorldServer World;
+        public IWorldAuthority World;
         public Action ClearLog;
     }
 
@@ -174,7 +174,7 @@ public static class GameCommandExecutor
         return remainder;
     }
 
-    private static bool TryParseHotbarItem(string text, BlockWorldServer world, out HotbarItem item)
+    private static bool TryParseHotbarItem(string text, IWorldAuthority world, out HotbarItem item)
     {
         item = default;
         var registry = world?.ContentCatalog?.Items ?? ItemRegistry.Active;

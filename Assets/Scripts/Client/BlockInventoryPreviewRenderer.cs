@@ -14,6 +14,7 @@ public sealed class BlockInventoryPreviewRenderer : MonoBehaviour
 
     private Transform stageRoot;
     private Transform cubePivot;
+    private Transform cubeOriginPivot;
     private Transform cubeTransform;
     private MeshFilter cubeFilter;
     private MeshRenderer cubeRenderer;
@@ -91,16 +92,19 @@ public sealed class BlockInventoryPreviewRenderer : MonoBehaviour
 
     private void RenderAllPreviews()
     {
-        for (int i = 0; i < previews.Count; i++)
+        using (RuntimeFrameProfiler.Begin("ui.hotbarPreviews"))
         {
-            var preview = previews[i];
-            if (preview == null || !preview.isActiveAndEnabled || !preview.ShouldRender())
+            for (int i = 0; i < previews.Count; i++)
             {
-                continue;
-            }
+                var preview = previews[i];
+                if (preview == null || !preview.isActiveAndEnabled || !preview.ShouldRender())
+                {
+                    continue;
+                }
 
-            RenderPreview(preview);
-            preview.MarkRendered();
+                RenderPreview(preview);
+                preview.MarkRendered();
+            }
         }
     }
 
@@ -113,9 +117,12 @@ public sealed class BlockInventoryPreviewRenderer : MonoBehaviour
         cubePivot = new GameObject("Pivot").transform;
         cubePivot.SetParent(stageRoot, false);
 
+        cubeOriginPivot = new GameObject("Origin").transform;
+        cubeOriginPivot.SetParent(cubePivot, false);
+
         var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         cube.name = "PreviewCube";
-        cube.transform.SetParent(cubePivot, false);
+        cube.transform.SetParent(cubeOriginPivot, false);
         cubeTransform = cube.transform;
         cubeTransform.localScale = Vector3.one * BlockItemGuiTransform.GuiScale;
         Destroy(cube.GetComponent<Collider>());
@@ -180,29 +187,50 @@ public sealed class BlockInventoryPreviewRenderer : MonoBehaviour
         cubeFilter.sharedMesh = BlockPreviewMeshBuilder.GetMesh(blockType);
         cubeRenderer.sharedMaterial = material;
 
-        var scale = BlockItemGuiTransform.GuiScale;
-        cubeTransform.localScale = Vector3.one * scale;
+        cubePivot.localPosition = Vector3.zero;
+        cubeOriginPivot.localPosition = Vector3.zero;
+        cubeOriginPivot.localRotation = Quaternion.identity;
+        cubeTransform.localScale = Vector3.one * ItemDisplayTransform.BlockGuiDefault.Scale;
         cubeTransform.localPosition = Vector3.zero;
+        cubeTransform.localRotation = Quaternion.identity;
 
         RenderToPreviewTexture(preview);
     }
 
     private void RenderItemPreview(BlockItemSlotPreview preview, ItemKind itemKind)
     {
-        var mesh = ItemPreviewMeshBuilder.GetMesh(itemKind);
-        var material = GetItemPreviewMaterial(itemKind);
+        Mesh mesh;
+        Material material;
+        if (ItemRegistry.Active != null
+            && ItemRegistry.Active.TryGet(itemKind, VoxelBlockType.Air, out var definition)
+            && !string.IsNullOrEmpty(definition.ShapeId.Name)
+            && ItemShapeMeshBuilder.TryGetRenderData(definition.ShapeId, int.MaxValue, itemKind, out mesh, out material)
+            && mesh != null
+            && material != null)
+        {
+            cubeFilter.sharedMesh = ItemShapeMeshBuilder.GetDisplayMesh(mesh);
+            cubeRenderer.sharedMaterial = material;
+            RenderItemMeshPreview(preview, itemKind);
+            return;
+        }
+
+        mesh = ItemPreviewMeshBuilder.GetMesh(itemKind);
+        material = GetItemPreviewMaterial(itemKind);
         if (mesh == null || material == null)
         {
             return;
         }
 
-        cubePivot.localRotation = BlockItemGuiTransform.GetRotation(preview.SpinAngle);
-        cubeFilter.sharedMesh = mesh;
+        cubeFilter.sharedMesh = ItemShapeMeshBuilder.GetDisplayMesh(mesh);
         cubeRenderer.sharedMaterial = material;
+        RenderItemMeshPreview(preview, itemKind);
+    }
 
-        var scale = BlockItemGuiTransform.GuiScale;
-        cubeTransform.localScale = Vector3.one * scale;
-        cubeTransform.localPosition = Vector3.zero;
+    private void RenderItemMeshPreview(BlockItemSlotPreview preview, ItemKind itemKind)
+    {
+        var item = new HotbarItem(itemKind);
+        var displayTransform = ItemDisplayTransforms.ResolveGui(item);
+        displayTransform.ApplyToWrapper(cubePivot, cubeOriginPivot, cubeTransform, preview.SpinAngle);
 
         RenderToPreviewTexture(preview);
     }

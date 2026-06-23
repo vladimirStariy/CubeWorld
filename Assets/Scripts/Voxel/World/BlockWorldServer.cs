@@ -1,62 +1,70 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority
+public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority, IWorldPresentationQueries
 {
     [Header("World")]
-    [SerializeField] private int worldWidth = 100;
-    [SerializeField] private int worldDepth = 100;
     [SerializeField] private int worldHeight = 16;
     [SerializeField] private int baseLayerY = 0;
     [SerializeField] private int chunkSize = 16;
 
+    [Header("Streaming")]
+    [SerializeField] private ChunkStreamingSettings chunkStreaming = new();
+
     [Header("Visuals")]
     [SerializeField] private int chiselResolution = 16;
 
-    private VoxelWorldStorage world;
-    private Transform chunksRoot;
+    private WorldSimulation simulation;
     private readonly ClayFormingStorage clayForming = new();
     private readonly PlayerInventoryState playerInventory = new();
     private readonly ContentCatalog contentCatalog = new();
     private GroundItemStorage groundItems;
     private bool contentConfigured;
+    private WorldSettings worldSettings;
 
+    public IWorldSimulation Simulation => simulation;
     public PlayerInventoryState PlayerInventory => playerInventory;
     public ContentCatalog ContentCatalog => contentCatalog;
+    public WorldSettings WorldSettings => worldSettings;
+    public ChunkStreamingSettings ChunkStreaming => chunkStreaming;
 
     public Texture2D BlockAtlasTexture { get; private set; }
 
-    public int WorldWidth => world.WorldWidth;
-    public int WorldDepth => world.WorldDepth;
-    public int WorldHeight => world.WorldHeight;
+    public int WorldHeight => simulation.WorldHeight;
 
     private void Awake()
     {
         chiselResolution = 16;
+        worldSettings = WorldGenerationLoader.LoadMergedSettings();
+        WorldSettings.Active = worldSettings;
 
-        chunksRoot = new GameObject("Chunks").transform;
-        chunksRoot.SetParent(transform, false);
+        worldHeight = worldSettings.Height;
+        baseLayerY = worldSettings.BaseLayerY;
 
-        world = new VoxelWorldStorage(
-            chunksRoot,
-            worldWidth,
-            worldDepth,
+        simulation = new WorldSimulation(
             worldHeight,
             baseLayerY,
             chunkSize,
             chiselResolution);
 
-        groundItems = new GroundItemStorage(world.IsBlockOccupied);
+        groundItems = new GroundItemStorage(simulation.IsBlockOccupied);
+    }
+
+    public Vector3 GetSpawnPosition()
+    {
+        return worldSettings != null
+            ? worldSettings.GetSpawnPosition()
+            : new Vector3(0.5f, baseLayerY + 2f, 0.5f);
     }
 
     private void Update()
     {
-        world.TickFunctionalBlocks(Time.deltaTime);
+        simulation.TickFunctionalBlocks(Time.deltaTime);
     }
 
     public bool TrySetBlock(Vector3Int position, VoxelBlockType blockType)
     {
-        var changed = world.TrySetBlock(position, blockType);
+        var changed = simulation.TrySetBlock(position, blockType);
         if (changed && blockType == VoxelBlockType.Air)
         {
             groundItems.RemoveSurfacesOnBlock(position);
@@ -65,29 +73,24 @@ public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority
         return changed;
     }
 
-    public bool IsInWorld(Vector3Int position)
-    {
-        return world.IsInWorld(position);
-    }
-
-    public bool HasSolidBlockAt(Vector3Int position)
-    {
-        return world.IsBlockOccupied(position);
-    }
-
     public bool TryQueryBlock(Vector3Int position, out BlockQueryResult result)
     {
-        return world.TryQueryBlock(position, out result);
+        return simulation.TryQueryBlock(position, out result);
+    }
+
+    public bool TryGetBiomeAt(Vector3Int worldPosition, out BiomeDefinition biome, out ClimateSample climate)
+    {
+        return simulation.TryGetBiomeAt(worldPosition, out biome, out climate);
     }
 
     public bool TryGetOutlineSegments(Vector3Int blockPosition, List<LineSegment> segments)
     {
-        return BlockOutlineBuilder.TryGetOutlineSegments(world, blockPosition, segments);
+        return BlockOutlineBuilder.TryGetOutlineSegments(simulation, blockPosition, segments);
     }
 
     public bool TryGetHitFaceOutline(Vector3Int blockPosition, Vector3 faceNormal, List<LineSegment> segments)
     {
-        return BlockOutlineBuilder.TryGetHitFaceOutline(world, blockPosition, faceNormal, segments);
+        return BlockOutlineBuilder.TryGetHitFaceOutline(simulation, blockPosition, faceNormal, segments);
     }
 
     public bool TryBuildStickStackOutline(Vector3Int hitBlock, Vector3 faceNormal, List<LineSegment> segments)
@@ -110,65 +113,40 @@ public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority
         return groundItems.TryGetStickStackCount(key, out stickCount);
     }
 
-    public bool HasChiseledBlockAt(Vector3Int position)
-    {
-        return world.HasChiseledBlock(position);
-    }
+    public bool HasChiseledBlockAt(Vector3Int position) => simulation.HasChiseledBlock(position);
 
-    public bool TryBeginChiselBlock(Vector3Int blockPosition)
-    {
-        return world.TryBeginChiselBlock(blockPosition);
-    }
+    public bool TryBeginChiselBlock(Vector3Int blockPosition) => simulation.TryBeginChiselBlock(blockPosition);
 
-    public bool TryChiselRemoveVoxel(Vector3Int blockPosition, Vector3 localPoint)
-    {
-        return world.TryChiselRemoveVoxel(blockPosition, localPoint);
-    }
+    public bool TryChiselRemoveVoxel(Vector3Int blockPosition, Vector3 localPoint) =>
+        simulation.TryChiselRemoveVoxel(blockPosition, localPoint);
 
-    public bool TryChiselAddVoxel(Vector3Int blockPosition, Vector3 localPoint)
-    {
-        return world.TryChiselAddVoxel(blockPosition, localPoint);
-    }
+    public bool TryChiselAddVoxel(Vector3Int blockPosition, Vector3 localPoint) =>
+        simulation.TryChiselAddVoxel(blockPosition, localPoint);
 
-    public bool TryGetCampfireState(Vector3Int position, out CampfireState state)
-    {
-        return world.TryGetCampfireState(position, out state);
-    }
+    public bool TryGetCampfireState(Vector3Int position, out CampfireState state) =>
+        simulation.TryGetCampfireState(position, out state);
 
-    public bool TryUseItemOnTarget(Vector3Int hitBlock, Vector3 faceNormal, HotbarItem item, out string message)
-    {
-        return world.TryUseItemOnTarget(hitBlock, faceNormal, item, out message);
-    }
+    public bool TryUseItemOnTarget(Vector3Int hitBlock, Vector3 faceNormal, HotbarItem item, out string message) =>
+        simulation.TryUseItemOnTarget(hitBlock, faceNormal, item, out message);
 
-    public bool TryBreakCampfireAssembly(Vector3Int hitBlock, Vector3 faceNormal, out string message)
-    {
-        return world.TryBreakCampfireAssembly(hitBlock, faceNormal, out message);
-    }
+    public bool TryBreakCampfireAssembly(Vector3Int hitBlock, Vector3 faceNormal, out string message) =>
+        simulation.TryBreakCampfireAssembly(hitBlock, faceNormal, out message);
 
-    public bool TryGetCampfireAssemblyState(Vector3Int clickedBlock, Vector3 faceNormal, out CampfireAssemblyState state)
-    {
-        return world.TryGetCampfireAssemblyState(clickedBlock, faceNormal, out state);
-    }
+    public bool TryGetCampfireAssemblyState(Vector3Int clickedBlock, Vector3 faceNormal, out CampfireAssemblyState state) =>
+        simulation.TryGetCampfireAssemblyState(clickedBlock, faceNormal, out state);
 
-    public void CopyCampfireAssemblySnapshots(List<CampfireAssemblySnapshot> buffer)
-    {
-        world.CopyCampfireAssemblySnapshots(buffer);
-    }
+    public void CopyCampfireAssemblySnapshots(List<CampfireAssemblySnapshot> buffer) =>
+        simulation.CopyCampfireAssemblySnapshots(buffer);
 
-    public bool TryInteractCampfire(Vector3Int position, CampfireInteraction interaction, out CampfireState state, out string message)
-    {
-        return world.TryInteractCampfire(position, interaction, out state, out message);
-    }
+    public bool TryInteractCampfire(Vector3Int position, CampfireInteraction interaction, out CampfireState state, out string message) =>
+        simulation.TryInteractCampfire(position, interaction, out state, out message);
 
-    public void CopyClayWorksiteSnapshots(List<ClayWorksiteSnapshot> buffer)
-    {
-        clayForming.CopySnapshots(buffer);
-    }
+    public void CopyClayWorksiteSnapshots(List<ClayWorksiteSnapshot> buffer) => clayForming.CopySnapshots(buffer);
 
     public bool TryPlaceClayWorksite(Vector3Int anchorBlock, Vector3Int faceNormal, out ClayWorksiteKey key, out string message)
     {
         key = default;
-        if (!world.IsBlockOccupied(anchorBlock))
+        if (!simulation.IsBlockOccupied(anchorBlock))
         {
             message = "Clay needs a solid surface.";
             return false;
@@ -177,20 +155,13 @@ public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority
         return clayForming.TryPlaceWorksite(anchorBlock, faceNormal, out key, out message);
     }
 
-    public bool TryFindClayWorksite(Vector3Int anchorBlock, Vector3Int faceNormal, out ClayWorksite worksite)
-    {
-        return clayForming.TryFindWorksite(anchorBlock, faceNormal, out worksite);
-    }
+    public bool TryFindClayWorksite(Vector3Int anchorBlock, Vector3Int faceNormal, out ClayWorksite worksite) =>
+        clayForming.TryFindWorksite(anchorBlock, faceNormal, out worksite);
 
-    public bool TryStartClayForming(ClayWorksiteKey key, string recipeId, out string message)
-    {
-        return clayForming.TryStartForming(key, recipeId, out message);
-    }
+    public bool TryStartClayForming(ClayWorksiteKey key, string recipeId, out string message) =>
+        clayForming.TryStartForming(key, recipeId, out message);
 
-    public void RemoveClayWorksite(ClayWorksiteKey key)
-    {
-        clayForming.RemoveWorksite(key);
-    }
+    public void RemoveClayWorksite(ClayWorksiteKey key) => clayForming.RemoveWorksite(key);
 
     public ClayFormingEditResult TryClayFormingAdd(ClayWorksiteKey key, int u, int v)
     {
@@ -206,20 +177,16 @@ public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority
         return result;
     }
 
-    public bool TryPlaceGroundItem(Vector3Int hitBlock, Vector3 faceNormal, Vector3 worldHitPoint, HotbarItem item, out string message)
-    {
-        return groundItems.TryPlaceItem(hitBlock, faceNormal, worldHitPoint, item, out message);
-    }
+    public bool TryPlaceGroundItem(Vector3Int hitBlock, Vector3 faceNormal, Vector3 worldHitPoint, HotbarItem item, out string message) =>
+        groundItems.TryPlaceItem(hitBlock, faceNormal, worldHitPoint, item, out message);
 
     public bool TryProbeGroundPickup(
         Vector3Int hitBlock,
         Vector3 faceNormal,
         Vector3 worldHitPoint,
         int requestedAmount,
-        out HotbarItem probeItem)
-    {
-        return groundItems.TryProbeGroundPickup(hitBlock, faceNormal, worldHitPoint, requestedAmount, out probeItem);
-    }
+        out HotbarItem probeItem) =>
+        groundItems.TryProbeGroundPickup(hitBlock, faceNormal, worldHitPoint, requestedAmount, out probeItem);
 
     public bool TryPickupGroundItem(
         Vector3Int hitBlock,
@@ -227,28 +194,68 @@ public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority
         Vector3 worldHitPoint,
         int requestedAmount,
         out HotbarItem pickedItem,
-        out string message)
-    {
-        return groundItems.TryPickupItem(hitBlock, faceNormal, worldHitPoint, requestedAmount, out pickedItem, out message);
-    }
+        out string message) =>
+        groundItems.TryPickupItem(hitBlock, faceNormal, worldHitPoint, requestedAmount, out pickedItem, out message);
 
-    public bool TryHasCampfireAssembly(Vector3Int hitBlock, Vector3 faceNormal)
-    {
-        return world.TryGetCampfireAssemblyState(hitBlock, faceNormal, out _);
-    }
+    public bool TryHasCampfireAssembly(Vector3Int hitBlock, Vector3 faceNormal) =>
+        simulation.TryGetCampfireAssemblyState(hitBlock, faceNormal, out _);
 
     public int ResolveGroundPickupAmount(
         Vector3Int hitBlock,
         Vector3 faceNormal,
         Vector3 worldHitPoint,
-        bool shiftHeld)
+        bool shiftHeld) =>
+        groundItems.ResolvePickupAmount(hitBlock, faceNormal, worldHitPoint, shiftHeld);
+
+    public void CopyGroundItemSnapshots(List<GroundItemSurfaceSnapshot> buffer) => groundItems.CopySnapshots(buffer);
+
+    public void SetClayFormingToolMode(ClayWorksiteKey key, ClayFormingToolMode toolMode) => clayForming.SetToolMode(key, toolMode);
+
+    public WorldCommandResult ExecuteCommand(WorldCommand command) => WorldCommandExecutor.Execute(command, this);
+
+    public void ConfigureContent()
     {
-        return groundItems.ResolvePickupAmount(hitBlock, faceNormal, worldHitPoint, shiftHeld);
+        if (contentConfigured)
+        {
+            return;
+        }
+
+        VanillaContentBootstrap.RegisterAll(contentCatalog);
+        WorldGenerationLoader.LoadBiomesFromPacks(contentCatalog.Biomes);
+        if (contentCatalog.Biomes.Biomes.Count == 0)
+        {
+            WorldGenerationLoader.RegisterFallbackBiomes(contentCatalog.Biomes);
+        }
+
+        WorldGenerationLoader.RegisterBuiltInGenerators(contentCatalog.WorldGenerators, worldSettings);
+        contentCatalog.WorldSettings = worldSettings;
+        simulation.SetItemUseRegistry(contentCatalog.ItemUse);
+        clayForming.SetRecipeRegistry(contentCatalog.ClayRecipes);
+        InitializeSimulation();
+        contentConfigured = true;
     }
 
-    public void CopyGroundItemSnapshots(List<GroundItemSurfaceSnapshot> buffer)
+    public Material BuildClientBlockMaterial(out Texture2D atlasTexture)
     {
-        groundItems.CopySnapshots(buffer);
+        var material = BlockWorldMaterialSetup.CreateBlockMaterial(contentCatalog.BlockTextures, out var atlas);
+        BlockAtlasTexture = atlas;
+        atlasTexture = atlas;
+        return material;
+    }
+
+    public void PrimeSimulation(Vector3 spawnPosition)
+    {
+        simulation.ConfigureStreaming(chunkStreaming);
+        simulation.PrimeSpawnArea(spawnPosition);
+    }
+
+    private void InitializeSimulation()
+    {
+        simulation.InitializeWorldGeneration(
+            contentCatalog.WorldGenerators,
+            worldSettings,
+            contentCatalog.Items,
+            contentCatalog.Biomes);
     }
 
     private void FinalizeClayRecipePlacement(ClayFormingEditResult result)
@@ -260,38 +267,5 @@ public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority
 
         var surfaceKey = GroundItemSurfaceKey.FromClayWorksite(result.CompletionWorksiteKey);
         groundItems.TryPlaceCompletedItem(surfaceKey, result.OutputItem, out _);
-    }
-
-    public void SetClayFormingToolMode(ClayWorksiteKey key, ClayFormingToolMode toolMode)
-    {
-        clayForming.SetToolMode(key, toolMode);
-    }
-
-    public WorldCommandResult ExecuteCommand(WorldCommand command)
-    {
-        return WorldCommandExecutor.Execute(command, this);
-    }
-
-    public void ConfigureContent()
-    {
-        if (contentConfigured)
-        {
-            return;
-        }
-
-        VanillaContentBootstrap.RegisterAll(contentCatalog);
-        world.SetItemUseRegistry(contentCatalog.ItemUse);
-        clayForming.SetRecipeRegistry(contentCatalog.ClayRecipes);
-        InitializeWorldVisuals();
-        contentConfigured = true;
-    }
-
-    private void InitializeWorldVisuals()
-    {
-        var material = BlockWorldMaterialSetup.CreateBlockMaterial(contentCatalog.BlockTextures, out var atlas);
-        BlockAtlasTexture = atlas;
-        world.SetChunkMaterial(material);
-        world.GenerateFlatWorld();
-        world.RebuildAllChunks();
     }
 }

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public sealed class GameCommandConsoleView
 {
-    private const int MaxLogLines = 8;
+    private const int MaxLogLines = 16;
     private const float InputBarHeight = 28f;
     private const float LogPanelHeight = 120f;
     private const float BottomOffset = 60f;

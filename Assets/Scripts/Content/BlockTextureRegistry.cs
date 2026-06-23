@@ -14,9 +14,11 @@ public sealed class BlockTextureRegistry
     private Texture2D atlas;
     private int atlasColumns = 3;
     private int atlasRows = 1;
+    private int tilePixelSize = BlockAtlasBuilder.DefaultTileSize;
 
     public int AtlasColumns => atlasColumns;
     public int AtlasRows => atlasRows;
+    public int TilePixelSize => tilePixelSize;
 
     public void RegisterBlock(VoxelBlockType blockType, BlockTexturesJson textures, string packDirectory)
     {
@@ -59,7 +61,8 @@ public sealed class BlockTextureRegistry
             }
         }
 
-        atlas = BlockAtlasBuilder.BuildDynamic(tiles, out atlasColumns, out atlasRows);
+        atlas = BlockAtlasBuilder.BuildDynamic(tiles, out atlasColumns, out atlasRows, out var builtTileWidth, out _);
+        tilePixelSize = builtTileWidth > 0 ? builtTileWidth : BlockAtlasBuilder.DefaultTileSize;
         if (atlas == null)
         {
             return false;

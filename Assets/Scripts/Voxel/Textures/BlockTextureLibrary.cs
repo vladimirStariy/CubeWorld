@@ -89,13 +89,20 @@ public static class BlockTextureLibrary
         };
     }
 
+    public static Vector4 GetAtlasTileRect(int slotIndex)
+    {
+        var tile = GetAtlasTile(slotIndex);
+        return new Vector4(tile.Offset.x, tile.Offset.y, tile.Size.x, tile.Size.y);
+    }
+
     /// <summary>
     /// Map 0..1 tile coordinates into atlas UV space, inset by half a texel to avoid bleeding.
     /// </summary>
     public static Vector2 GetAtlasUv(int atlasSlot, float tileU, float tileV)
     {
         var tile = GetAtlasTile(atlasSlot);
-        var inset = 0.5f / BlockAtlasBuilder.DefaultTileSize;
+        var tilePixelSize = BlockTextureRegistry.Active?.TilePixelSize ?? BlockAtlasBuilder.DefaultTileSize;
+        var inset = 0.5f / tilePixelSize;
         tileU = Mathf.Lerp(inset, 1f - inset, tileU);
         tileV = Mathf.Lerp(inset, 1f - inset, tileV);
         return tile.Offset + new Vector2(tileU * tile.Size.x, tileV * tile.Size.y);

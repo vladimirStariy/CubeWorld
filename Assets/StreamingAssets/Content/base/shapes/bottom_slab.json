@@ -1,0 +1,18 @@
+{
+  "id": "base:bottom_slab",
+  "render": "bottom_slab",
+  "occlusion": "boxes",
+  "occlusionBoxes": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 8, 16]
+    }
+  ],
+  "elements": [
+    {
+      "name": "Slab",
+      "from": [0, 0, 0],
+      "to": [16, 8, 16]
+    }
+  ]
+}

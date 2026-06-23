@@ -152,7 +152,11 @@ MonoBehaviour:
   worldClient: {fileID: 1859169324}
   playerController: {fileID: 0}
   crosshairUi: {fileID: 0}
+  creativeInventory: {fileID: 0}
+  creativeInventoryUi: {fileID: 0}
+  gameCommandConsole: {fileID: 0}
   playerDebugOverlay: {fileID: 0}
+  blockEntityUi: {fileID: 0}
   playerCamera: {fileID: 0}
 --- !u!4 &100537684
 Transform:
@@ -374,15 +378,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df72040b6b50d234ebc9d7c1ba1e97d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlockWorldServer
-  worldWidth: 100
-  worldDepth: 100
   worldHeight: 16
   baseLayerY: 0
   chunkSize: 16
-  dirtTexture: {fileID: 2800000, guid: 2a545e812b054094f8446bebe95a10f8, type: 3}
-  grassTexture: {fileID: 2800000, guid: eb3e46c763244b44db65fe17c8baf70e, type: 3}
-  grassSideTexture: {fileID: 2800000, guid: 206e213c509f44b4e8880d9aeb8a14c2, type: 3}
-  blockAtlasTexture: {fileID: 0}
+  chunkStreaming:
+    viewDistanceChunks: 12
+    unloadDistanceChunks: 8
+    maxGenerationsPerFrame: 2
+    maxMeshBuildsPerFrame: 2
+    useAdaptiveFramePacing: 1
+    targetFrameMilliseconds: 10
+    minStreamingMillisecondsPerFrame: 1.5
+    maxStreamingMillisecondsPerFrame: 6
+    maxChunkLoadRequestsPerFrame: 10
+    syncGenerationRadiusChunks: 2
   chiselResolution: 16
 --- !u!4 &876469165
 Transform:
@@ -428,11 +437,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2cd333beae533f34cb31bcdf10867e96, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlockWorldClient
-  server: {fileID: 876469164}
   playerCamera: {fileID: 0}
   interactDistance: 8
   selectionOutline: {fileID: 0}
   playerCharacterController: {fileID: 0}
+  creativeInventory: {fileID: 0}
+  creativeInventoryUi: {fileID: 0}
+  clayFormingController: {fileID: 0}
+  blockEntityUi: {fileID: 0}
 --- !u!4 &1859169325
 Transform:
   m_ObjectHideFlags: 0

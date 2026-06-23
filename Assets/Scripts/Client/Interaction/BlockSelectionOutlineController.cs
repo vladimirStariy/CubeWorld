@@ -3,7 +3,7 @@ using UnityEngine;
 
 public sealed class BlockSelectionOutlineController
 {
-    private readonly BlockWorldServer server;
+    private readonly IWorldPresentationQueries presentation;
     private readonly Camera playerCamera;
     private readonly float interactDistance;
     private readonly List<LineSegment> faceOutlineSegments = new();
@@ -14,9 +14,9 @@ public sealed class BlockSelectionOutlineController
     private int lastOutlinedStickCount = -1;
     private bool outlineVisible;
 
-    public BlockSelectionOutlineController(BlockWorldServer server, Camera playerCamera, float interactDistance)
+    public BlockSelectionOutlineController(IWorldPresentationQueries presentationQueries, Camera playerCamera, float interactDistance)
     {
-        this.server = server;
+        presentation = presentationQueries;
         this.playerCamera = playerCamera;
         this.interactDistance = interactDistance;
     }
@@ -82,7 +82,7 @@ public sealed class BlockSelectionOutlineController
             return;
         }
 
-        if (!server.TryGetOutlineSegments(blockPosition, faceOutlineSegments))
+        if (!presentation.TryGetHitFaceOutline(blockPosition, target.FaceNormal, faceOutlineSegments))
         {
             Hide();
             return;
@@ -102,8 +102,8 @@ public sealed class BlockSelectionOutlineController
     {
         int stickCount;
         var hasStickStack = target.GroundItemKey.HasValue
-            ? server.TryGetStickStackCount(target.GroundItemKey.Value, out stickCount)
-            : server.TryGetStickStackCount(blockPosition, faceNormal, out stickCount);
+            ? presentation.TryGetStickStackCount(target.GroundItemKey.Value, out stickCount)
+            : presentation.TryGetStickStackCount(blockPosition, faceNormal, out stickCount);
 
         if (!hasStickStack)
         {
@@ -119,8 +119,8 @@ public sealed class BlockSelectionOutlineController
         }
 
         var built = target.GroundItemKey.HasValue
-            ? server.TryBuildStickStackOutline(target.GroundItemKey.Value, faceOutlineSegments)
-            : server.TryBuildStickStackOutline(blockPosition, faceNormal, faceOutlineSegments);
+            ? presentation.TryBuildStickStackOutline(target.GroundItemKey.Value, faceOutlineSegments)
+            : presentation.TryBuildStickStackOutline(blockPosition, faceNormal, faceOutlineSegments);
 
         if (!built)
         {

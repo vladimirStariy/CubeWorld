@@ -1,0 +1,5 @@
+{
+  "id": "base:custom_mesh",
+  "render": "custom_mesh",
+  "occlusion": "none"
+}

@@ -6,18 +6,18 @@ public sealed class CampfireAssemblyWorldVisualizer : MonoBehaviour
     private readonly List<CampfireAssemblySnapshot> snapshotBuffer = new();
     private readonly Dictionary<Vector3Int, AssemblyVisual> visuals = new();
 
-    private BlockWorldServer server;
+    private IWorldAuthority authority;
     private Transform visualsRoot;
     private bool configured;
 
-    public void Configure(BlockWorldServer worldServer)
+    public void Configure(IWorldAuthority worldAuthority)
     {
         if (configured)
         {
             return;
         }
 
-        server = worldServer;
+        authority = worldAuthority;
         visualsRoot = new GameObject("CampfireAssemblyVisuals").transform;
         visualsRoot.SetParent(transform, false);
         configured = true;
@@ -26,12 +26,12 @@ public sealed class CampfireAssemblyWorldVisualizer : MonoBehaviour
 
     public void Sync()
     {
-        if (!configured || server == null)
+        if (!configured || authority == null)
         {
             return;
         }
 
-        server.CopyCampfireAssemblySnapshots(snapshotBuffer);
+        authority.CopyCampfireAssemblySnapshots(snapshotBuffer);
 
         var seen = new HashSet<Vector3Int>();
         for (int i = 0; i < snapshotBuffer.Count; i++)

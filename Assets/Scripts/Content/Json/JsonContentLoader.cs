@@ -5,6 +5,7 @@ using UnityEngine;
 public static class JsonContentLoader
 {
     private const string ContentFolderName = "Content";
+    private const string BaseFolderName = "base";
     private const string BlocksFolderName = "blocks";
     private const string ItemsFolderName = "items";
     private const string RecipesFolderName = "recipes";
@@ -19,6 +20,8 @@ public static class JsonContentLoader
             return;
         }
 
+        ItemShapeMeshBuilder.ClearCache();
+
         var contentRoot = Path.Combine(Application.streamingAssetsPath, ContentFolderName);
         if (!Directory.Exists(contentRoot))
         {
@@ -26,12 +29,20 @@ public static class JsonContentLoader
             return;
         }
 
+        BlockShapeLibrary.Clear();
+        BlockShapeLoader.LoadBaseShapes(contentRoot, catalog.Shapes);
+
         var packDirectories = new List<string>(Directory.GetDirectories(contentRoot));
         packDirectories.Sort(ComparePackLoadOrder);
 
-        var loadedAny = false;
+        var loadedAny = catalog.Shapes.All.Count > 0;
         for (int i = 0; i < packDirectories.Count; i++)
         {
+            if (IsBaseContentDirectory(packDirectories[i]))
+            {
+                continue;
+            }
+
             if (TryLoadPackDirectory(packDirectories[i], catalog))
             {
                 loadedAny = true;
@@ -49,13 +60,14 @@ public static class JsonContentLoader
         var packName = Path.GetFileName(packDirectory);
         var blockCount = LoadBlockFiles(Path.Combine(packDirectory, BlocksFolderName), catalog, packDirectory, packName);
         var itemCount = LoadItemFiles(Path.Combine(packDirectory, ItemsFolderName), catalog.Items, packName, ItemsFolderName);
+        var shapeCount = ItemShapeLoader.LoadPackShapes(packDirectory, catalog.ItemShapes);
         var recipeCount = LoadRecipeFiles(Path.Combine(packDirectory, RecipesFolderName), catalog, packName);
 
-        var total = blockCount + itemCount + recipeCount;
+        var total = blockCount + itemCount + shapeCount + recipeCount;
         if (total > 0)
         {
             Debug.Log(
-                $"Loaded content pack '{packName}': {blockCount} block(s), {itemCount} item(s), {recipeCount} recipe(s).");
+                $"Loaded content pack '{packName}': {blockCount} block(s), {itemCount} item(s), {shapeCount} shape(s), {recipeCount} recipe(s).");
             return true;
         }
 
@@ -96,6 +108,11 @@ public static class JsonContentLoader
             }
 
             catalog.Items.Register(definition);
+
+            if (definition.RuntimeKind == ItemKind.Block && definition.RuntimeBlockType != VoxelBlockType.Air)
+            {
+                BlockShapeLibrary.RegisterBlockShape(definition.RuntimeBlockType, definition.ShapeId);
+            }
 
             if (ContentJsonParser.HasBlockTextures(json.textures))
             {
@@ -226,6 +243,11 @@ public static class JsonContentLoader
             Debug.LogError($"Failed to read JSON file {filePath}: {ex.Message}");
             return false;
         }
+    }
+
+    private static bool IsBaseContentDirectory(string directoryPath)
+    {
+        return string.Equals(Path.GetFileName(directoryPath), BaseFolderName, System.StringComparison.OrdinalIgnoreCase);
     }
 
     private static int ComparePackLoadOrder(string leftPath, string rightPath)

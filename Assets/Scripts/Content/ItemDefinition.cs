@@ -3,11 +3,14 @@ using UnityEngine;
 public sealed class ItemDefinition
 {
     public ContentId Id { get; }
+    public ContentId ShapeId { get; }
     public string DisplayName { get; }
     public ItemKind RuntimeKind { get; }
     public VoxelBlockType RuntimeBlockType { get; }
     public ItemCapabilities Capabilities { get; }
     public GroundItemPlacementProfile? GroundProfile { get; }
+    public ItemDisplayTransform? GuiTransform { get; }
+    public ItemDisplayTransform? FpHandTransform { get; }
     public bool ShowInCreative { get; }
     public string[] CommandAliases { get; }
 
@@ -19,14 +22,20 @@ public sealed class ItemDefinition
         VoxelBlockType runtimeBlockType = VoxelBlockType.Air,
         GroundItemPlacementProfile? groundProfile = null,
         bool showInCreative = true,
-        params string[] commandAliases)
+        string[] commandAliases = null,
+        ContentId shapeId = default,
+        ItemDisplayTransform? guiTransform = null,
+        ItemDisplayTransform? fpHandTransform = null)
     {
         Id = id;
+        ShapeId = shapeId;
         DisplayName = displayName;
         RuntimeKind = runtimeKind;
         RuntimeBlockType = runtimeBlockType;
         Capabilities = capabilities;
         GroundProfile = groundProfile;
+        GuiTransform = guiTransform;
+        FpHandTransform = fpHandTransform;
         ShowInCreative = showInCreative;
         CommandAliases = commandAliases ?? System.Array.Empty<string>();
     }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 using UnityEngine;
 
 public sealed class ChiseledBlockData
@@ -152,5 +153,17 @@ public sealed class ChiseledBlockData
     private int ToIndex(int x, int y, int z)
     {
         return x + Resolution * (y + Resolution * z);
+    }
+
+    public ChiseledBlockData Clone()
+    {
+        var copy = new ChiseledBlockData(Resolution, WorldPosition, BlockType);
+        copy.CopyCellsFrom(cells);
+        return copy;
+    }
+
+    private void CopyCellsFrom(bool[] source)
+    {
+        Array.Copy(source, cells, cells.Length);
     }
 }

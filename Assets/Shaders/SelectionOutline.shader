@@ -1,4 +1,4 @@
-Shader "CubeWorld/SelectionOutline"
+﻿Shader "CubeWorld/SelectionOutline"
 {
     Properties
     {

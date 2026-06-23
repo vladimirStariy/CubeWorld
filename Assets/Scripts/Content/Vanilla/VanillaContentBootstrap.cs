@@ -22,14 +22,9 @@ public static class VanillaContentBootstrap
         ItemRegistry.Active = catalog.Items;
         ClayFormingRecipeRegistry.Active = catalog.ClayRecipes;
         BlockTextureRegistry.Active = catalog.BlockTextures;
-    }
-
-    /// <summary>
-    /// Mods implement <see cref="IContentRegistrar"/> for code-only extensions,
-    /// Mods drop a folder under StreamingAssets/Content/ with blocks/, items/, recipes/clay/, textures/.
-    /// </summary>
-    public static void RegisterMod(IContentRegistrar registrar, ContentCatalog catalog)
-    {
-        registrar?.Register(catalog);
+        BlockShapeRegistry.Active = catalog.Shapes;
+        BlockShapeLibrary.Active = catalog.Shapes;
+        ItemShapeRegistry.Active = catalog.ItemShapes;
+        BlockShapeLibrary.RegisterBlockShape(VoxelBlockType.Campfire, ContentJsonParser.ResolveShapeId(null, VoxelBlockType.Campfire));
     }
 }

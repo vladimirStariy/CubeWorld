@@ -5,10 +5,19 @@ public static class BlockWorldMaterialSetup
     public static Material CreateBlockMaterial(BlockTextureRegistry registry, out Texture2D atlasTexture)
     {
         atlasTexture = null;
-        var litShader = Shader.Find("Universal Render Pipeline/Lit");
+        var blockAtlasShader = Shader.Find("CubeWorld/BlockAtlasLit");
+        if (blockAtlasShader == null)
+        {
+            Debug.LogError(
+                "BlockWorldMaterialSetup: CubeWorld/BlockAtlasLit shader not found or failed to compile. " +
+                "Block textures require this shader. Check Assets/Shaders/BlockAtlasLit.shader in the Console.");
+            return null;
+        }
+
+        var litShader = blockAtlasShader;
         if (litShader == null)
         {
-            Debug.LogError("BlockWorldMaterialSetup: URP Lit shader not found.");
+            Debug.LogError("BlockWorldMaterialSetup: block atlas shader not found.");
             return null;
         }
 
@@ -26,7 +35,7 @@ public static class BlockWorldMaterialSetup
         material.SetColor("_BaseColor", Color.white);
         material.SetFloat("_Smoothness", 0.1f);
         material.SetFloat("_Metallic", 0f);
-        BlockTextureLibrary.ApplyFullAtlasToMaterial(material);
+        material.SetFloat("_TilePixelSize", registry.TilePixelSize);
         return material;
     }
 
@@ -34,6 +43,7 @@ public static class BlockWorldMaterialSetup
     {
         var material = new Material(litShader);
         material.SetColor("_BaseColor", new Color(0.39f, 0.25f, 0.12f));
+        material.SetFloat("_TilePixelSize", BlockAtlasBuilder.DefaultTileSize);
         return material;
     }
 }

@@ -1,0 +1,10 @@
+{
+  "id": "cubeworld:cold",
+  "displayName": "Cold",
+  "minTemperature": -4,
+  "maxTemperature": 8,
+  "surfaceBlock": "cubeworld:dirt",
+  "subsurfaceBlock": "cubeworld:dirt",
+  "fillerBlock": "cubeworld:dirt",
+  "priority": 0
+}

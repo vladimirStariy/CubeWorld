@@ -1,0 +1,10 @@
+{
+  "id": "cubeworld:temperate",
+  "displayName": "Temperate",
+  "minTemperature": 8,
+  "maxTemperature": 22,
+  "surfaceBlock": "cubeworld:grass_block",
+  "subsurfaceBlock": "cubeworld:dirt",
+  "fillerBlock": "cubeworld:dirt",
+  "priority": 1
+}

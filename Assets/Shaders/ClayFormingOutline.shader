@@ -4,6 +4,7 @@ Shader "CubeWorld/ClayFormingOutline"
     {
         _OutlineColor("Outline Color", Color) = (0, 0, 0, 1)
         _LineWidth("Line Width (pixels)", Float) = 2
+        _ViewBias("View Bias", Float) = 0.002
     }
     SubShader
     {
@@ -21,16 +22,19 @@ Shader "CubeWorld/ClayFormingOutline"
             ZWrite Off
             ZTest LEqual
             Blend SrcAlpha OneMinusSrcAlpha
+            Offset 0, -1
 
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "ScreenSpaceLine.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _OutlineColor;
                 float _LineWidth;
+                float _ViewBias;
             CBUFFER_END
 
             struct Attributes
@@ -50,25 +54,12 @@ Shader "CubeWorld/ClayFormingOutline"
                 float3 otherOS = input.lineData.xyz;
                 float extrude = input.lineData.w;
 
-                float4 clipA = TransformObjectToHClip(input.positionOS.xyz);
-                float4 clipB = TransformObjectToHClip(otherOS);
+                float3 positionWS = BiasOutlineTowardCamera(input.positionOS.xyz, _ViewBias);
+                float3 otherWS = BiasOutlineTowardCamera(otherOS, _ViewBias);
 
-                float2 a = clipA.xy / clipA.w;
-                float2 b = clipB.xy / clipB.w;
-                float2 dir = b - a;
-
-                if (dot(dir, dir) < 1e-8)
-                {
-                    dir = float2(1, 0);
-                }
-                else
-                {
-                    dir = normalize(dir);
-                }
-
-                float2 perp = float2(-dir.y, dir.x);
-                float2 offset = perp * extrude * (_LineWidth * 0.5) / _ScreenParams.y;
-                clipA.xy += offset * clipA.w;
+                float4 clipA = TransformWorldToHClip(positionWS);
+                float4 clipB = TransformWorldToHClip(otherWS);
+                clipA = ApplyScreenSpaceLineExtrusion(clipA, clipB, extrude, _LineWidth);
 
                 output.positionHCS = clipA;
                 return output;

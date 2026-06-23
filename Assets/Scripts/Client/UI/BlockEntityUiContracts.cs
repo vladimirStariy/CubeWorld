@@ -22,7 +22,7 @@ public sealed class BlockEntityUiState
 
 public interface IBlockEntityUiProvider
 {
-    bool CanOpen(Vector3Int blockPosition, BlockWorldServer server);
-    bool TryBuildState(Vector3Int blockPosition, BlockWorldServer server, string lastStatus, out BlockEntityUiState state);
-    bool TryHandleAction(Vector3Int blockPosition, BlockWorldServer server, string actionId, out string statusMessage);
+    bool CanOpen(Vector3Int blockPosition, IWorldAuthority authority);
+    bool TryBuildState(Vector3Int blockPosition, IWorldAuthority authority, string lastStatus, out BlockEntityUiState state);
+    bool TryHandleAction(Vector3Int blockPosition, IWorldAuthority authority, string actionId, out string statusMessage);
 }

@@ -9,15 +9,15 @@ public sealed class CampfireBlockEntityUiProvider : IBlockEntityUiProvider
         new("take_output", "Take Output")
     };
 
-    public bool CanOpen(Vector3Int blockPosition, BlockWorldServer server)
+    public bool CanOpen(Vector3Int blockPosition, IWorldAuthority authority)
     {
-        return server != null && server.TryGetCampfireState(blockPosition, out _);
+        return authority != null && authority.TryGetCampfireState(blockPosition, out _);
     }
 
-    public bool TryBuildState(Vector3Int blockPosition, BlockWorldServer server, string lastStatus, out BlockEntityUiState state)
+    public bool TryBuildState(Vector3Int blockPosition, IWorldAuthority authority, string lastStatus, out BlockEntityUiState state)
     {
         state = null;
-        if (server == null || !server.TryGetCampfireState(blockPosition, out var campfire))
+        if (authority == null || !authority.TryGetCampfireState(blockPosition, out var campfire))
         {
             return false;
         }
@@ -38,10 +38,10 @@ public sealed class CampfireBlockEntityUiProvider : IBlockEntityUiProvider
         return true;
     }
 
-    public bool TryHandleAction(Vector3Int blockPosition, BlockWorldServer server, string actionId, out string statusMessage)
+    public bool TryHandleAction(Vector3Int blockPosition, IWorldAuthority authority, string actionId, out string statusMessage)
     {
         statusMessage = "Unknown action.";
-        if (server == null)
+        if (authority == null)
         {
             return false;
         }
@@ -62,7 +62,7 @@ public sealed class CampfireBlockEntityUiProvider : IBlockEntityUiProvider
                 return false;
         }
 
-        server.TryInteractCampfire(blockPosition, interaction, out _, out statusMessage);
+        authority.TryInteractCampfire(blockPosition, interaction, out _, out statusMessage);
         return true;
     }
 }
