@@ -33,7 +33,8 @@ public sealed class BlockWorldClient : MonoBehaviour
         CreativeInventoryUI inventoryUi,
         ClayFormingController clayForming,
         Material blockMaterial,
-        BlockSelectionOutline outline = null)
+        BlockSelectionOutline outline = null,
+        Material fluidMaterial = null)
     {
         if (configured)
         {
@@ -52,6 +53,9 @@ public sealed class BlockWorldClient : MonoBehaviour
         var blockMaterialToUse = blockMaterial != null
             ? blockMaterial
             : connection.BuildClientBlockMaterial(out _);
+        var fluidMaterialToUse = fluidMaterial != null
+            ? fluidMaterial
+            : connection.BuildClientFluidMaterial(out _);
         var terrainDrawer = chunksRoot.GetComponent<ChunkTerrainDrawer>();
         if (terrainDrawer == null)
         {
@@ -59,7 +63,7 @@ public sealed class BlockWorldClient : MonoBehaviour
         }
 
         worldPresenter = new ChunkWorldPresenter(connection.Simulation, terrainDrawer);
-        worldPresenter.Configure(connection.ChunkStreaming, blockMaterialToUse);
+        worldPresenter.Configure(connection.ChunkStreaming, blockMaterialToUse, fluidMaterialToUse);
         connection.PrimeSpawnArea(connection.GetSpawnPosition());
         worldPresenter.FlushPendingMeshes();
 
@@ -213,6 +217,16 @@ public sealed class BlockWorldClient : MonoBehaviour
         estimatedBaseFrameMs = worldPresenter.EstimatedBaseFrameMs;
         streamingBudgetMs = worldPresenter.LastStreamingBudgetMs;
         return true;
+    }
+
+    public FluidSimulationDiagnostics GetFluidSimulationDiagnostics()
+    {
+        return connection?.Simulation?.GetFluidSimulationDiagnostics() ?? default;
+    }
+
+    public FluidCell GetFluidAt(Vector3Int worldPosition)
+    {
+        return connection?.Simulation?.GetFluid(worldPosition) ?? default;
     }
 
     public bool TryGetBiomeAt(Vector3Int worldPosition, out BiomeDefinition biome, out ClimateSample climate)

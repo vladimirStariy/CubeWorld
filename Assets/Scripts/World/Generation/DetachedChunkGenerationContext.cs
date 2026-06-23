@@ -5,6 +5,7 @@ internal sealed class DetachedChunkGenerationContext : IChunkGenerationContext
     private readonly Vector3Int chunkCoord;
     private readonly int chunkSize;
     private readonly VoxelBlockType[] blocks;
+    private readonly FluidCell[] fluids;
 
     public DetachedChunkGenerationContext(
         Vector3Int chunkCoord,
@@ -12,11 +13,13 @@ internal sealed class DetachedChunkGenerationContext : IChunkGenerationContext
         WorldSettings settings,
         ItemRegistry items,
         BiomeRegistry biomes,
-        VoxelBlockType[] blocks)
+        VoxelBlockType[] blocks,
+        FluidCell[] fluids)
     {
         this.chunkCoord = chunkCoord;
         this.chunkSize = chunkSize;
         this.blocks = blocks;
+        this.fluids = fluids;
         Settings = settings;
         Items = items;
         Biomes = biomes;
@@ -59,5 +62,27 @@ internal sealed class DetachedChunkGenerationContext : IChunkGenerationContext
 
         var local = ChunkGenerationMath.WorldToLocal(worldPosition, chunkSize);
         blocks[ChunkGenerationMath.ToIndex(local, chunkSize)] = blockType;
+    }
+
+    public void SetFluid(Vector3Int worldPosition, FluidCell fluid)
+    {
+        if (fluid.IsEmpty || worldPosition.y < Settings.BaseLayerY || worldPosition.y >= Settings.Height)
+        {
+            return;
+        }
+
+        if (ChunkGenerationMath.WorldToChunk(worldPosition, chunkSize) != chunkCoord)
+        {
+            return;
+        }
+
+        var local = ChunkGenerationMath.WorldToLocal(worldPosition, chunkSize);
+        var index = ChunkGenerationMath.ToIndex(local, chunkSize);
+        if (blocks[index] != VoxelBlockType.Air)
+        {
+            return;
+        }
+
+        fluids[index] = fluid;
     }
 }

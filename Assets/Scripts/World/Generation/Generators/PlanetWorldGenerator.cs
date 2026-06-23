@@ -14,6 +14,7 @@ public sealed class PlanetWorldGenerator : IChunkWorldGenerator
             chunkCoord.x * chunkSize,
             chunkCoord.y * chunkSize,
             chunkCoord.z * chunkSize);
+        var surfaceHeights = new int[chunkSize, chunkSize];
 
         for (int localZ = 0; localZ < chunkSize; localZ++)
         {
@@ -34,6 +35,8 @@ public sealed class PlanetWorldGenerator : IChunkWorldGenerator
                 }
 
                 var surfaceY = ComputeSurfaceHeight(worldX, worldZ, settings, climate);
+                surfaceHeights[localX, localZ] = surfaceY;
+                var underwater = surfaceY < settings.SeaLevel;
                 for (int worldY = settings.BaseLayerY; worldY <= surfaceY; worldY++)
                 {
                     if (worldY < origin.y || worldY >= origin.y + chunkSize)
@@ -42,12 +45,26 @@ public sealed class PlanetWorldGenerator : IChunkWorldGenerator
                     }
 
                     var blockType = worldY == surfaceY
-                        ? surfaceBlock
+                        ? underwater ? subsurfaceBlock : surfaceBlock
                         : worldY >= surfaceY - 2
                             ? subsurfaceBlock
                             : fillerBlock;
                     context.SetBlock(new Vector3Int(worldX, worldY, worldZ), blockType);
                 }
+            }
+        }
+
+        for (int localZ = 0; localZ < chunkSize; localZ++)
+        {
+            for (int localX = 0; localX < chunkSize; localX++)
+            {
+                OceanGenerationHelper.FillOceanColumn(
+                    context,
+                    origin.x + localX,
+                    origin.z + localZ,
+                    surfaceHeights[localX, localZ],
+                    origin.y,
+                    chunkSize);
             }
         }
     }

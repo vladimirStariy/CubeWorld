@@ -46,4 +46,9 @@ internal sealed class VoxelChunkGenerationContext : IChunkGenerationContext
     {
         storage.SetBlockForGeneration(worldPosition, blockType, targetChunk);
     }
+
+    public void SetFluid(Vector3Int worldPosition, FluidCell fluid)
+    {
+        storage.SetFluidForGeneration(worldPosition, fluid, targetChunk);
+    }
 }

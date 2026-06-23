@@ -39,6 +39,34 @@ public static class BlockWorldMaterialSetup
         return material;
     }
 
+    public static Material CreateFluidMaterial(BlockTextureRegistry registry, out Texture2D atlasTexture)
+    {
+        atlasTexture = null;
+        var fluidShader = Shader.Find("CubeWorld/BlockAtlasFluid");
+        if (fluidShader == null)
+        {
+            Debug.LogError("BlockWorldMaterialSetup: CubeWorld/BlockAtlasFluid shader not found.");
+            return null;
+        }
+
+        if (registry == null || !registry.TryGetAtlas(out atlasTexture))
+        {
+            var material = new Material(fluidShader);
+            material.SetColor("_FluidColor", FluidTextureLibrary.GetTint(FluidType.SaltWater));
+            material.SetFloat("_TilePixelSize", BlockAtlasBuilder.DefaultTileSize);
+            return material;
+        }
+
+        atlasTexture.wrapMode = TextureWrapMode.Clamp;
+        atlasTexture.filterMode = FilterMode.Point;
+
+        var fluidMaterial = new Material(fluidShader);
+        fluidMaterial.SetTexture("_BaseMap", atlasTexture);
+        fluidMaterial.SetColor("_FluidColor", FluidTextureLibrary.GetTint(FluidType.SaltWater));
+        fluidMaterial.SetFloat("_TilePixelSize", registry.TilePixelSize);
+        return fluidMaterial;
+    }
+
     private static Material CreateFallbackMaterial(Shader litShader)
     {
         var material = new Material(litShader);

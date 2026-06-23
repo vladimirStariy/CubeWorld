@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public interface IWorldSimulation : IVoxelBlockView
+public interface IWorldSimulation : IVoxelBlockView, IVoxelFluidView
 {
     int LoadedChunkCount { get; }
     bool HasPendingStreaming { get; }
@@ -25,6 +25,7 @@ public interface IWorldSimulation : IVoxelBlockView
     void ProcessSimulationQueues();
     void SetItemUseRegistry(ItemUseRegistry registry);
     void TickFunctionalBlocks(float deltaTime);
+    FluidSimulationDiagnostics GetFluidSimulationDiagnostics();
 
     bool TrySetBlock(Vector3Int position, VoxelBlockType blockType);
     bool TryQueryBlock(Vector3Int position, out BlockQueryResult result);

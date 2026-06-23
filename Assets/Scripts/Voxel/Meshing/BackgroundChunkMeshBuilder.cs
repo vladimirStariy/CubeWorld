@@ -10,12 +10,18 @@ internal sealed class BackgroundChunkMeshBuilder
         public readonly Vector3Int Coord;
         public readonly int BuildVersion;
         public readonly ChunkMeshGeometry Geometry;
+        public readonly ChunkMeshGeometry FluidGeometry;
 
-        public CompletedMesh(Vector3Int coord, int buildVersion, ChunkMeshGeometry geometry)
+        public CompletedMesh(
+            Vector3Int coord,
+            int buildVersion,
+            ChunkMeshGeometry geometry,
+            ChunkMeshGeometry fluidGeometry)
         {
             Coord = coord;
             BuildVersion = buildVersion;
             Geometry = geometry;
+            FluidGeometry = fluidGeometry;
         }
     }
 
@@ -100,20 +106,24 @@ internal sealed class BackgroundChunkMeshBuilder
 
     private void RunBuild(Vector3Int chunkCoord, int buildVersion, ChunkMeshBuildSnapshot snapshot)
     {
-        ChunkMeshGeometry geometry = null;
         try
         {
             var view = new DetachedChunkMeshView(snapshot);
             var blocks = new ChunkBlockData(snapshot.ChunkSize, snapshot.Coord);
             blocks.CopyBlocksFrom(snapshot.Blocks);
+            blocks.CopyFluidsFrom(snapshot.Fluids);
 
-            var scratch = new ChunkMeshScratch();
-            ChunkMeshBuilder.BuildChunkMesh(view, blocks, scratch);
-            geometry = ChunkMeshGeometry.FromScratch(scratch);
+            var solidScratch = new ChunkMeshScratch();
+            ChunkMeshBuilder.BuildChunkMesh(view, blocks, solidScratch);
+            var geometry = ChunkMeshGeometry.FromScratch(solidScratch);
+
+            var fluidScratch = new ChunkMeshScratch();
+            FluidMeshBuilder.BuildFluidMesh(view, view, blocks, fluidScratch);
+            var fluidGeometry = ChunkMeshGeometry.FromScratch(fluidScratch);
 
             lock (gate)
             {
-                completed.Enqueue(new CompletedMesh(chunkCoord, buildVersion, geometry));
+                completed.Enqueue(new CompletedMesh(chunkCoord, buildVersion, geometry, fluidGeometry));
                 inFlight.Remove(chunkCoord);
             }
         }

@@ -243,6 +243,9 @@ public sealed class BlockWorldServer : MonoBehaviour, IWorldAuthority, IWorldPre
         return material;
     }
 
+    public Material BuildClientFluidMaterial(out Texture2D atlasTexture) =>
+        BlockWorldMaterialSetup.CreateFluidMaterial(contentCatalog.BlockTextures, out atlasTexture);
+
     public void PrimeSimulation(Vector3 spawnPosition)
     {
         simulation.ConfigureStreaming(chunkStreaming);

@@ -9,7 +9,9 @@ internal sealed class ChunkMeshBuildSnapshot
     public int MinWorldY { get; private set; }
     public int WorldHeight { get; private set; }
     public VoxelBlockType[] Blocks { get; private set; }
+    public FluidCell[] Fluids { get; private set; }
     public Dictionary<Vector3Int, VoxelBlockType> ExternalBlocks { get; private set; }
+    public Dictionary<Vector3Int, FluidCell> ExternalFluids { get; private set; }
     public Dictionary<Vector3Int, ChiseledBlockData> ChiseledBlocks { get; private set; }
 
     public static ChunkMeshBuildSnapshot Capture(IWorldSimulation world, ChunkBlockData chunk)
@@ -17,6 +19,7 @@ internal sealed class ChunkMeshBuildSnapshot
         var chunkSize = world.ChunkSize;
         var coord = chunk.Coord;
         var externalBlocks = new Dictionary<Vector3Int, VoxelBlockType>();
+        var externalFluids = new Dictionary<Vector3Int, FluidCell>();
         var chiseledBlocks = new Dictionary<Vector3Int, ChiseledBlockData>();
 
         for (int face = 0; face < VoxelConstants.NeighborDirs.Length; face++)
@@ -34,7 +37,7 @@ internal sealed class ChunkMeshBuildSnapshot
                         continue;
                     }
 
-                    CaptureNeighbor(world, neighborPosition, externalBlocks, chiseledBlocks);
+                    CaptureNeighbor(world, neighborPosition, externalBlocks, externalFluids, chiseledBlocks);
                 }
             }
         }
@@ -62,7 +65,9 @@ internal sealed class ChunkMeshBuildSnapshot
             MinWorldY = world.MinWorldY,
             WorldHeight = world.WorldHeight,
             Blocks = chunk.CopyBlocksToArray(),
+            Fluids = chunk.CopyFluidsToArray(),
             ExternalBlocks = externalBlocks,
+            ExternalFluids = externalFluids,
             ChiseledBlocks = chiseledBlocks
         };
     }
@@ -71,6 +76,7 @@ internal sealed class ChunkMeshBuildSnapshot
         IWorldSimulation world,
         Vector3Int neighborPosition,
         Dictionary<Vector3Int, VoxelBlockType> externalBlocks,
+        Dictionary<Vector3Int, FluidCell> externalFluids,
         Dictionary<Vector3Int, ChiseledBlockData> chiseledBlocks)
     {
         if (!world.IsInWorld(neighborPosition))
@@ -85,6 +91,11 @@ internal sealed class ChunkMeshBuildSnapshot
         }
 
         externalBlocks[neighborPosition] = world.GetBlock(neighborPosition);
+        var fluid = world.GetFluid(neighborPosition);
+        if (!fluid.IsEmpty)
+        {
+            externalFluids[neighborPosition] = fluid;
+        }
 
         if (world.TryGetChiseledBlock(neighborPosition, out var chiseled))
         {

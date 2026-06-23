@@ -49,13 +49,14 @@ public sealed class VoxelGameWiring
 
         var characterController = PlayerController.GetComponent<CharacterController>();
         var blockMaterial = Session.Connection.BuildClientBlockMaterial(out var blockAtlas);
+        var fluidMaterial = Session.Connection.BuildClientFluidMaterial(out _);
 
         var blockEntityUiRegistry = new BlockEntityUiRegistry();
         blockEntityUiRegistry.Register(new CampfireBlockEntityUiProvider());
         BlockEntityUi.Configure(HudRoot.Canvas, Session.Connection.Authority, PlayerController, blockEntityUiRegistry);
         CreativeInventoryUi.Configure(HudRoot.Canvas, CreativeInventory, PlayerController, CommandConsole, blockAtlas);
         ClayFormingController.Configure(Session.Connection, PlayerCamera, CreativeInventory, CreativeInventoryUi, PlayerController, HudRoot.Canvas);
-        WorldClient.Configure(Session.Connection, chunksRoot, PlayerCamera, characterController, CreativeInventory, BlockEntityUi, CreativeInventoryUi, ClayFormingController, blockMaterial);
+        WorldClient.Configure(Session.Connection, chunksRoot, PlayerCamera, characterController, CreativeInventory, BlockEntityUi, CreativeInventoryUi, ClayFormingController, blockMaterial, null, fluidMaterial);
         CommandConsole.Configure(HudRoot.Canvas, PlayerController, CreativeInventory, Session.Connection, CreativeInventoryUi);
         CrosshairUi.Configure(HudRoot.Canvas);
         DebugOverlay.Configure(HudRoot.Canvas, PlayerController, WorldClient);

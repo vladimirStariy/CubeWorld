@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-internal sealed class DetachedChunkMeshView : IVoxelBlockView
+internal sealed class DetachedChunkMeshView : IVoxelBlockView, IVoxelFluidView
 {
     private readonly ChunkMeshBuildSnapshot snapshot;
 
@@ -17,6 +17,21 @@ internal sealed class DetachedChunkMeshView : IVoxelBlockView
     public bool IsInWorld(Vector3Int position)
     {
         return position.y >= snapshot.MinWorldY && position.y < snapshot.WorldHeight;
+    }
+
+    public FluidCell GetFluid(Vector3Int worldPosition)
+    {
+        if (TryWorldToLocal(worldPosition, out var local))
+        {
+            return snapshot.Fluids[ToIndex(local, snapshot.ChunkSize)];
+        }
+
+        if (snapshot.ExternalFluids.TryGetValue(worldPosition, out var fluid))
+        {
+            return fluid;
+        }
+
+        return FluidCell.Empty;
     }
 
     public VoxelBlockType GetBlock(Vector3Int position)
@@ -168,6 +183,7 @@ internal sealed class DetachedChunkMeshView : IVoxelBlockView
         }
 
         return snapshot.ExternalBlocks.ContainsKey(worldPosition)
+            || snapshot.ExternalFluids.ContainsKey(worldPosition)
             || snapshot.ChiseledBlocks.ContainsKey(worldPosition);
     }
 

@@ -15,4 +15,6 @@ public interface IChunkGenerationContext
     bool TryResolveBlock(ContentId blockId, out VoxelBlockType blockType);
 
     void SetBlock(Vector3Int worldPosition, VoxelBlockType blockType);
+
+    void SetFluid(Vector3Int worldPosition, FluidCell fluid);
 }

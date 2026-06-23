@@ -35,4 +35,7 @@ public sealed class LocalIntegratedServerConnection : ILocalIntegratedServerConn
 
     public Material BuildClientBlockMaterial(out Texture2D atlasTexture) =>
         server.BuildClientBlockMaterial(out atlasTexture);
+
+    public Material BuildClientFluidMaterial(out Texture2D atlasTexture) =>
+        server.BuildClientFluidMaterial(out atlasTexture);
 }

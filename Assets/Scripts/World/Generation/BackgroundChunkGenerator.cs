@@ -9,11 +9,13 @@ internal sealed class BackgroundChunkGenerator
     {
         public readonly Vector3Int Coord;
         public readonly VoxelBlockType[] Blocks;
+        public readonly FluidCell[] Fluids;
 
-        public CompletedChunk(Vector3Int coord, VoxelBlockType[] blocks)
+        public CompletedChunk(Vector3Int coord, VoxelBlockType[] blocks, FluidCell[] fluids)
         {
             Coord = coord;
             Blocks = blocks;
+            Fluids = fluids;
         }
     }
 
@@ -113,6 +115,7 @@ internal sealed class BackgroundChunkGenerator
         BiomeRegistry biomes)
     {
         var blocks = new VoxelBlockType[blockCount];
+        var fluids = new FluidCell[blockCount];
         try
         {
             var context = new DetachedChunkGenerationContext(
@@ -121,12 +124,13 @@ internal sealed class BackgroundChunkGenerator
                 settings,
                 items,
                 biomes,
-                blocks);
+                blocks,
+                fluids);
             generator.GenerateChunk(chunkCoord, context);
 
             lock (gate)
             {
-                completed.Enqueue(new CompletedChunk(chunkCoord, blocks));
+                completed.Enqueue(new CompletedChunk(chunkCoord, blocks, fluids));
                 inFlight.Remove(chunkCoord);
             }
         }

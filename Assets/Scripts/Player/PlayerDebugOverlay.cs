@@ -78,6 +78,16 @@ public sealed class PlayerDebugOverlay : MonoBehaviour
         {
             textBuilder.Append("\nBlock: ").Append(blockPos.x).Append(' ').Append(blockPos.y).Append(' ').Append(blockPos.z);
             textBuilder.Append("\nType: ").Append(GetBlockTypeLabel(blockInfo));
+            if (worldClient != null)
+            {
+                var fluid = worldClient.GetFluidAt(blockPos);
+                if (!fluid.IsEmpty)
+                {
+                    textBuilder.Append("\nFluid: ").Append(fluid.Type)
+                        .Append(" L").Append(fluid.Level)
+                        .Append(fluid.IsSource ? " (source)" : string.Empty);
+                }
+            }
             if (blockInfo.IsChiseled)
             {
                 var totalCells = blockInfo.MicroResolution * blockInfo.MicroResolution * blockInfo.MicroResolution;
@@ -101,6 +111,18 @@ public sealed class PlayerDebugOverlay : MonoBehaviour
             textBuilder.Append("\nPacing base: ").Append(baseMs.ToString("0.0"));
             textBuilder.Append(" ms  stream budget: ").Append(streamBudget.ToString("0.0")).Append(" ms");
         }
+
+        var fluidDiagnostics = worldClient != null
+            ? worldClient.GetFluidSimulationDiagnostics()
+            : default;
+        textBuilder.Append("\n--- Fluids ---");
+        textBuilder.Append("\nSpread ticks: ").Append(fluidDiagnostics.SpreadTickCount);
+        textBuilder.Append("  queue: ").Append(fluidDiagnostics.PendingQueueCount);
+        textBuilder.Append("  frontier: ").Append(fluidDiagnostics.FrontierQueueCount);
+        textBuilder.Append("\nLast tick: ").Append(fluidDiagnostics.LastTickProcessed);
+        textBuilder.Append(" cells, ").Append(fluidDiagnostics.LastTickChanges).Append(" changed");
+        textBuilder.Append("\nTotal: ").Append(fluidDiagnostics.TotalCellsProcessed);
+        textBuilder.Append(" processed, ").Append(fluidDiagnostics.TotalFluidChanges).Append(" changes");
 
         debugText.text = textBuilder.ToString();
     }
@@ -146,7 +168,7 @@ public sealed class PlayerDebugOverlay : MonoBehaviour
         rect.anchorMax = new Vector2(0f, 1f);
         rect.pivot = new Vector2(0f, 1f);
         rect.anchoredPosition = new Vector2(12f, -12f);
-        rect.sizeDelta = new Vector2(420f, 360f);
+        rect.sizeDelta = new Vector2(420f, 420f);
     }
 
     private void SetVisible(bool visible)

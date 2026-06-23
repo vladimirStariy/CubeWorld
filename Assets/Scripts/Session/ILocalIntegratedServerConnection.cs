@@ -13,4 +13,6 @@ public interface ILocalIntegratedServerConnection : IGameServerConnection
     void PrimeSpawnArea(Vector3 spawnPosition);
 
     Material BuildClientBlockMaterial(out Texture2D atlasTexture);
+
+    Material BuildClientFluidMaterial(out Texture2D atlasTexture);
 }

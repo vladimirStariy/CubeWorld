@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 
 public sealed class WorldSimulation : IWorldSimulation
@@ -9,6 +10,7 @@ public sealed class WorldSimulation : IWorldSimulation
 
     private readonly Dictionary<Vector3Int, ChunkBlockData> chunks = new();
     private readonly Dictionary<Vector3Int, VoxelBlockType[]> unloadedChunkCache = new();
+    private readonly Dictionary<Vector3Int, FluidCell[]> unloadedFluidCache = new();
     private readonly HashSet<Vector3Int> dirtyChunks = new();
     private readonly HashSet<Vector3Int> presentationDirtySet = new();
     private readonly HashSet<Vector3Int> modifiedChunkCoords = new();
@@ -20,6 +22,8 @@ public sealed class WorldSimulation : IWorldSimulation
     private readonly List<Vector3Int> chunkUnloadBuffer = new();
     private readonly List<Vector3Int> chunkCoordSortBuffer = new();
     private readonly BackgroundChunkGenerator backgroundGenerator = new();
+    private readonly FluidSpreadSimulator fluidSpreadSimulator = new();
+    private readonly Dictionary<long, int> terrainSurfaceYCache = new();
     private Vector3 lastStreamingPlayerWorldPosition;
     private readonly Dictionary<Vector3Int, ChiseledBlockData> chiseledBlocks = new();
     private readonly Dictionary<Vector3Int, CampfireBlockEntity> campfires = new();
@@ -350,6 +354,7 @@ public sealed class WorldSimulation : IWorldSimulation
         pendingStreamLoads.Clear();
         pendingStreamLoadSet.Clear();
         backgroundGenerator.Clear();
+        unloadedFluidCache.Clear();
         lastStreamingCenter = new Vector3Int(int.MinValue, 0, int.MinValue);
         lastMinChunkY = int.MinValue;
         lastMaxChunkY = int.MinValue;
@@ -357,6 +362,8 @@ public sealed class WorldSimulation : IWorldSimulation
 
     public void PrimeSpawnArea(Vector3 spawnPosition)
     {
+        fluidSpreadSimulator.ClearQueues();
+        terrainSurfaceYCache.Clear();
         lastStreamingCenter = new Vector3Int(int.MinValue, 0, int.MinValue);
         lastMinChunkY = int.MinValue;
         lastMaxChunkY = int.MinValue;
@@ -443,10 +450,17 @@ public sealed class WorldSimulation : IWorldSimulation
         if (oldType != blockType)
         {
             chunk.SetBlock(local, blockType);
+            if (blockType != VoxelBlockType.Air)
+            {
+                chunk.SetFluid(local, FluidCell.Empty);
+            }
+
             modifiedChunkCoords.Add(chunkCoord);
             UpdateFunctionalBlockEntities(position, oldType, blockType);
             RemoveCampfireAssembliesAffectedByBlockChange(position, oldType, blockType);
             WorldSimulationEvents.RaiseBlockChanged(position, oldType, blockType);
+            WakeFluidSpreadAround(position);
+            InvalidateTerrainSurfaceCache(position.x, position.z);
         }
 
         MarkChunkDirty(chunkCoord);
@@ -537,15 +551,31 @@ public sealed class WorldSimulation : IWorldSimulation
 
     public void TickFunctionalBlocks(float deltaTime)
     {
-        if (deltaTime <= 0f || campfires.Count == 0)
+        if (deltaTime <= 0f)
         {
             return;
         }
 
-        foreach (var campfire in campfires.Values)
+        if (campfires.Count > 0)
         {
-            campfire.Tick(deltaTime);
+            foreach (var campfire in campfires.Values)
+            {
+                campfire.Tick(deltaTime);
+            }
         }
+
+        var fluidStopwatch = Stopwatch.StartNew();
+        fluidSpreadSimulator.Tick(this, deltaTime);
+        RuntimeFrameProfiler.Record("sim.fluids", fluidStopwatch.Elapsed.TotalMilliseconds);
+        if (dirtyChunks.Count > 0)
+        {
+            FlushPresentationDirty();
+        }
+    }
+
+    public FluidSimulationDiagnostics GetFluidSimulationDiagnostics()
+    {
+        return fluidSpreadSimulator.GetDiagnostics();
     }
 
     public bool TryBeginChiselBlock(Vector3Int blockPosition)
@@ -675,6 +705,22 @@ public sealed class WorldSimulation : IWorldSimulation
         }
 
         return chunk.GetBlock(WorldToLocal(position));
+    }
+
+    public FluidCell GetFluid(Vector3Int position)
+    {
+        if (!IsInWorld(position))
+        {
+            return FluidCell.Empty;
+        }
+
+        var chunkCoord = WorldToChunk(position);
+        if (!chunks.TryGetValue(chunkCoord, out var chunk))
+        {
+            return FluidCell.Empty;
+        }
+
+        return chunk.GetFluid(WorldToLocal(position));
     }
 
     public bool IsFullCubeBlock(Vector3Int position)
@@ -850,8 +896,15 @@ public sealed class WorldSimulation : IWorldSimulation
         if (unloadedChunkCache.TryGetValue(chunkCoord, out var cachedBlocks))
         {
             chunk.CopyBlocksFrom(cachedBlocks);
+            if (unloadedFluidCache.TryGetValue(chunkCoord, out var cachedFluids))
+            {
+                chunk.CopyFluidsFrom(cachedFluids);
+            }
+
             unloadedChunkCache.Remove(chunkCoord);
+            unloadedFluidCache.Remove(chunkCoord);
             generatedChunks.Add(chunkCoord);
+            WakeFluidsAfterGeneration(chunkCoord);
             NotifyChunkPresentationChanged(chunkCoord);
             return;
         }
@@ -869,6 +922,7 @@ public sealed class WorldSimulation : IWorldSimulation
         if (modifiedChunkCoords.Contains(chunkCoord))
         {
             unloadedChunkCache[chunkCoord] = chunk.CopyBlocksToArray();
+            unloadedFluidCache[chunkCoord] = chunk.CopyFluidsToArray();
         }
 
         chunks.Remove(chunkCoord);
@@ -918,6 +972,7 @@ public sealed class WorldSimulation : IWorldSimulation
             itemRegistry,
             biomeRegistry);
         chunkGenerator.GenerateChunk(chunk.Coord, context);
+        WakeFluidsAfterGeneration(chunk.Coord);
     }
 
     private bool TryScheduleBackgroundGeneration(Vector3Int chunkCoord)
@@ -952,7 +1007,13 @@ public sealed class WorldSimulation : IWorldSimulation
             }
 
             chunk.CopyBlocksFrom(result.Blocks);
+            if (result.Fluids != null)
+            {
+                chunk.CopyFluidsFrom(result.Fluids);
+            }
+
             generatedChunks.Add(result.Coord);
+            WakeFluidsAfterGeneration(result.Coord);
             QueueChunkPresentationChanged(result.Coord);
         }
     }
@@ -1152,6 +1213,162 @@ public sealed class WorldSimulation : IWorldSimulation
         }
 
         targetChunk.SetBlock(WorldToLocal(worldPosition), blockType);
+    }
+
+    internal void SetFluidForGeneration(Vector3Int worldPosition, FluidCell fluid, ChunkBlockData targetChunk)
+    {
+        if (!IsInWorld(worldPosition) || targetChunk == null || fluid.IsEmpty)
+        {
+            return;
+        }
+
+        if (WorldToChunk(worldPosition) != targetChunk.Coord)
+        {
+            return;
+        }
+
+        var local = WorldToLocal(worldPosition);
+        if (targetChunk.GetBlock(local) != VoxelBlockType.Air)
+        {
+            return;
+        }
+
+        targetChunk.SetFluid(local, fluid);
+    }
+
+    internal bool IsFluidSimulationReady(Vector3Int position)
+    {
+        if (!IsInWorld(position))
+        {
+            return false;
+        }
+
+        var chunkCoord = WorldToChunk(position);
+        return chunks.ContainsKey(chunkCoord) && generatedChunks.Contains(chunkCoord);
+    }
+
+    internal bool IsFluidChunkResident(Vector3Int position)
+    {
+        if (!IsInWorld(position))
+        {
+            return false;
+        }
+
+        return chunks.ContainsKey(WorldToChunk(position));
+    }
+
+    internal int GetTerrainSurfaceY(int worldX, int worldZ)
+    {
+        var key = PackColumnKey(worldX, worldZ);
+        if (terrainSurfaceYCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var surfaceY = -1;
+        for (int y = WorldHeight - 1; y >= MinWorldY; y--)
+        {
+            var position = new Vector3Int(worldX, y, worldZ);
+            if (!IsInWorld(position))
+            {
+                continue;
+            }
+
+            if (IsFullCubeBlock(position))
+            {
+                surfaceY = y;
+                break;
+            }
+        }
+
+        terrainSurfaceYCache[key] = surfaceY;
+        return surfaceY;
+    }
+
+    internal int GetFluidGroundSupportY(Vector3Int fluidPosition)
+    {
+        var minY = Mathf.Max(MinWorldY, fluidPosition.y - 24);
+        for (int y = fluidPosition.y - 1; y >= minY; y--)
+        {
+            var position = new Vector3Int(fluidPosition.x, y, fluidPosition.z);
+            if (!IsInWorld(position))
+            {
+                break;
+            }
+
+            if (IsFullCubeBlock(position))
+            {
+                return y;
+            }
+        }
+
+        return -1;
+    }
+
+    private static long PackColumnKey(int worldX, int worldZ)
+    {
+        return ((long)worldX << 32) | (uint)worldZ;
+    }
+
+    private void InvalidateTerrainSurfaceCache(int worldX, int worldZ)
+    {
+        terrainSurfaceYCache.Remove(PackColumnKey(worldX, worldZ));
+    }
+
+    internal bool TrySetFluidForSimulation(Vector3Int position, FluidCell fluid)
+    {
+        if (!IsFluidSimulationReady(position) || fluid.IsEmpty)
+        {
+            return false;
+        }
+
+        var chunkCoord = WorldToChunk(position);
+        var chunk = chunks[chunkCoord];
+        var local = WorldToLocal(position);
+        if (chunk.GetBlock(local) != VoxelBlockType.Air)
+        {
+            return false;
+        }
+
+        var current = chunk.GetFluid(local);
+        if (current.Type == fluid.Type
+            && current.Level == fluid.Level
+            && current.IsSource == fluid.IsSource)
+        {
+            return false;
+        }
+
+        chunk.SetFluid(local, fluid);
+        modifiedChunkCoords.Add(chunkCoord);
+        MarkChunkDirty(chunkCoord);
+        MarkNeighborChunksDirtyIfBorder(local, chunkCoord);
+        return true;
+    }
+
+    internal void EnqueueFluidSpreadWake(Vector3Int position)
+    {
+        fluidSpreadSimulator.Enqueue(position);
+    }
+
+    internal void EnqueueFluidSpreadFrontier(Vector3Int position)
+    {
+        fluidSpreadSimulator.EnqueueFrontier(position);
+    }
+
+    private void WakeFluidSpreadAround(Vector3Int position)
+    {
+        fluidSpreadSimulator.EnqueueFrontier(position);
+        fluidSpreadSimulator.EnqueueFrontier(position + Vector3Int.up);
+        fluidSpreadSimulator.EnqueueFrontier(position + Vector3Int.down);
+        fluidSpreadSimulator.EnqueueFrontier(position + Vector3Int.left);
+        fluidSpreadSimulator.EnqueueFrontier(position + Vector3Int.right);
+        fluidSpreadSimulator.EnqueueFrontier(position + new Vector3Int(0, 0, 1));
+        fluidSpreadSimulator.EnqueueFrontier(position + new Vector3Int(0, 0, -1));
+    }
+
+    private void WakeFluidsAfterGeneration(Vector3Int chunkCoord)
+    {
+        // Ocean sources are placed at generation time; only simulate fluids after block changes.
     }
 
     private void MarkChunkDirty(Vector3Int chunkCoord)

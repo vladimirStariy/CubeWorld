@@ -10,6 +10,7 @@ public sealed class ChunkWorldPresenter
     private readonly Queue<Vector3Int> pendingMeshBuilds = new();
     private readonly HashSet<Vector3Int> pendingMeshBuildSet = new();
     private readonly ChunkMeshScratch meshScratch = new();
+    private readonly ChunkMeshScratch fluidMeshScratch = new();
     private readonly List<Vector3Int> meshBuildSortBuffer = new();
     private readonly BackgroundChunkMeshBuilder backgroundMeshBuilder = new();
     private readonly Dictionary<Vector3Int, int> meshBuildVersions = new();
@@ -32,11 +33,11 @@ public sealed class ChunkWorldPresenter
         simulation.ChunkUnloaded += HandleChunkUnloaded;
     }
 
-    public void Configure(ChunkStreamingSettings settings, Material material)
+    public void Configure(ChunkStreamingSettings settings, Material material, Material fluidMaterial = null)
     {
         streamingSettings = settings;
         chunkMaterial = material;
-        terrainDrawer.Configure(chunkMaterial, renderChunks);
+        terrainDrawer.Configure(chunkMaterial, renderChunks, fluidMaterial);
     }
 
     public void UpdateStreaming(Vector3 playerWorldPosition)
@@ -259,23 +260,55 @@ public sealed class ChunkWorldPresenter
 
         if (result.Geometry == null || result.Geometry.IsEmpty)
         {
-            RemoveRenderEntry(result.Coord);
-            return;
+            if (result.FluidGeometry == null || result.FluidGeometry.IsEmpty)
+            {
+                RemoveRenderEntry(result.Coord);
+                return;
+            }
         }
 
         var entry = GetOrCreateRenderEntry(result.Coord);
-        entry.ApplyMesh(
-            result.Geometry.Vertices,
-            result.Geometry.Triangles,
-            result.Geometry.Normals,
-            result.Geometry.Uvs,
-            result.Geometry.TileRects,
-            result.Geometry.TileCounts);
+        ApplySolidGeometry(entry, result.Geometry);
+        ApplyFluidGeometry(entry, result.FluidGeometry);
 
-        if (!entry.HasVisibleGeometry)
+        if (!entry.HasVisibleGeometry && !entry.HasVisibleFluidGeometry)
         {
             RemoveRenderEntry(result.Coord);
         }
+    }
+
+    private static void ApplySolidGeometry(ChunkRenderEntry entry, ChunkMeshGeometry geometry)
+    {
+        if (geometry == null || geometry.IsEmpty)
+        {
+            entry.ClearSolidMesh();
+            return;
+        }
+
+        entry.ApplyMesh(
+            geometry.Vertices,
+            geometry.Triangles,
+            geometry.Normals,
+            geometry.Uvs,
+            geometry.TileRects,
+            geometry.TileCounts);
+    }
+
+    private static void ApplyFluidGeometry(ChunkRenderEntry entry, ChunkMeshGeometry geometry)
+    {
+        if (geometry == null || geometry.IsEmpty)
+        {
+            entry.ClearFluidMesh();
+            return;
+        }
+
+        entry.ApplyFluidMesh(
+            geometry.Vertices,
+            geometry.Triangles,
+            geometry.Normals,
+            geometry.Uvs,
+            geometry.TileRects,
+            geometry.TileCounts);
     }
 
     private bool TryScheduleBackgroundMesh(Vector3Int chunkCoord)
@@ -285,7 +318,7 @@ public sealed class ChunkWorldPresenter
             return false;
         }
 
-        if (blocks.IsEmpty())
+        if (!blocks.HasRenderableContent())
         {
             RemoveRenderEntry(chunkCoord);
             return true;
@@ -307,7 +340,7 @@ public sealed class ChunkWorldPresenter
             return false;
         }
 
-        if (blocks.IsEmpty())
+        if (!blocks.HasRenderableContent())
         {
             RemoveRenderEntry(chunkCoord);
             return true;
@@ -315,8 +348,16 @@ public sealed class ChunkWorldPresenter
 
         var entry = GetOrCreateRenderEntry(chunkCoord);
         ChunkMeshBuilder.BuildChunkMesh(simulation, blocks, entry, meshScratch);
+        FluidMeshBuilder.BuildFluidMesh(simulation, simulation, blocks, fluidMeshScratch);
+        entry.ApplyFluidMesh(
+            fluidMeshScratch.Vertices,
+            fluidMeshScratch.Triangles,
+            fluidMeshScratch.Normals,
+            fluidMeshScratch.Uvs,
+            fluidMeshScratch.TileRects,
+            fluidMeshScratch.TileCounts);
 
-        if (!entry.HasVisibleGeometry)
+        if (!entry.HasVisibleGeometry && !entry.HasVisibleFluidGeometry)
         {
             RemoveRenderEntry(chunkCoord);
         }
